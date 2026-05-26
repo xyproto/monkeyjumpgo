@@ -16,6 +16,7 @@ const (
 func main() {
 	boardSize := defaultBoardSize
 	winSize := defaultWinSize
+	tiny := false
 	var filename string
 
 	for _, arg := range os.Args[1:] {
@@ -81,6 +82,7 @@ Configuration:
 			os.Exit(0)
 		case "--tiny":
 			winSize = 100
+			tiny = true
 		default:
 			if n, err := strconv.Atoi(arg); err == nil {
 				boardSize = n
@@ -105,7 +107,7 @@ Configuration:
 		}
 	}
 
-	app, err := NewApp(boardSize, filename, winSize)
+	app, err := NewApp(boardSize, filename, winSize, tiny)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

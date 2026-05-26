@@ -17,7 +17,7 @@ type App struct {
 	kb       *Keybindings
 }
 
-func NewApp(boardSize int, filename string, winSize int) (*App, error) {
+func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error) {
 	if err := sdlInit(); err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func NewApp(boardSize int, filename string, winSize int) (*App, error) {
 		}
 	}
 
-	br, err := NewBoardRenderer(ren, boardSize, winSize, winSize, themeDir)
+	br, err := NewBoardRenderer(ren, boardSize, winSize, winSize, themeDir, tiny)
 	if err != nil {
 		gtp.Close()
 		ren.Destroy()
@@ -152,6 +152,12 @@ func (a *App) Run() {
 					a.board.CursorY = y
 					needsRedraw = true
 				}
+
+			case EventWindowEnter:
+				x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
+				a.board.CursorX = x
+				a.board.CursorY = y
+				needsRedraw = true
 			}
 		}
 

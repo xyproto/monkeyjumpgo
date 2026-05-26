@@ -15,14 +15,16 @@ type BoardRenderer struct {
 	boardSize int
 	windowW   int
 	windowH   int
+	tiny      bool
 }
 
-func NewBoardRenderer(r *Renderer, boardSize, windowW, windowH int, themeDir string) (*BoardRenderer, error) {
+func NewBoardRenderer(r *Renderer, boardSize, windowW, windowH int, themeDir string, tiny bool) (*BoardRenderer, error) {
 	br := &BoardRenderer{
 		renderer:  r,
 		boardSize: boardSize,
 		windowW:   windowW,
 		windowH:   windowH,
+		tiny:      tiny,
 	}
 
 	boardPath := filepath.Join(themeDir, "board.png")
@@ -77,7 +79,12 @@ func (br *BoardRenderer) Draw(board *Board) {
 	r.Clear()
 
 	// Draw board background
-	r.RenderTexture(br.boardTex, 0, 0, float32(br.windowW), float32(br.windowH))
+	if br.tiny {
+		r.SetDrawColor(160, 160, 160, 255)
+		r.FillRect(0, 0, float32(br.windowW), float32(br.windowH))
+	} else {
+		r.RenderTexture(br.boardTex, 0, 0, float32(br.windowW), float32(br.windowH))
+	}
 
 	cw, ch := br.cellSize()
 	margin := br.margin()

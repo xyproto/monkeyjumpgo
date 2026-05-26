@@ -129,6 +129,7 @@ const (
 	EventKeyDown
 	EventMouseMotion
 	EventMouseButtonDown
+	EventWindowEnter
 )
 
 type Event struct {
@@ -147,7 +148,6 @@ func pollEvent() (Event, bool) {
 		case C.SDL_EVENT_QUIT:
 			return Event{Type: EventQuit}, true
 		case C.SDL_EVENT_KEY_DOWN:
-			// SDL_KeyboardEvent: type(4) + reserved(4) + timestamp(8) + windowID(4) + scancode(4)...
 			kev := (*C.SDL_KeyboardEvent)(unsafe.Pointer(&ev))
 			return Event{Type: EventKeyDown, Key: int(kev.scancode)}, true
 		case C.SDL_EVENT_MOUSE_MOTION:
@@ -156,6 +156,11 @@ func pollEvent() (Event, bool) {
 		case C.SDL_EVENT_MOUSE_BUTTON_DOWN:
 			bev := (*C.SDL_MouseButtonEvent)(unsafe.Pointer(&ev))
 			return Event{Type: EventMouseButtonDown, MouseX: float32(bev.x), MouseY: float32(bev.y), Button: int(bev.button)}, true
+		case C.SDL_EVENT_WINDOW_MOUSE_ENTER, C.SDL_EVENT_WINDOW_FOCUS_GAINED, C.SDL_EVENT_WINDOW_EXPOSED:
+			// Re-query mouse position when window regains focus/mouse
+			var mx, my C.float
+			C.SDL_GetMouseState(&mx, &my)
+			return Event{Type: EventWindowEnter, MouseX: float32(mx), MouseY: float32(my)}, true
 		}
 		return Event{Type: EventNone}, true
 	}
