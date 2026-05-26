@@ -42,7 +42,7 @@ func NewApp(boardSize int, filename string) (*App, error) {
 
 	// Read GnuGo command from config
 	gtpCmd := "gnugo --mode gtp"
-	confPath := filepath.Join("conf", "gnugocmd.conf")
+	confPath := dataPath("conf", "gnugocmd.conf")
 	if data, err := os.ReadFile(confPath); err == nil {
 		cmd := strings.TrimSpace(string(data))
 		if cmd != "" {
@@ -61,13 +61,13 @@ func NewApp(boardSize int, filename string) (*App, error) {
 	board := NewBoard(boardSize, gtp)
 
 	// Read theme from config
-	themeDir := filepath.Join("themes", "uligo")
-	themeConfPath := filepath.Join("conf", "theme.conf")
+	themeDir := dataPath("themes", "uligo")
+	themeConfPath := dataPath("conf", "theme.conf")
 	if data, err := os.ReadFile(themeConfPath); err == nil {
 		for line := range strings.SplitSeq(string(data), "\n") {
 			line = strings.TrimSpace(line)
 			if line != "" && !strings.HasPrefix(line, "#") {
-				themeDir = filepath.Join("themes", line)
+				themeDir = dataPath("themes", line)
 				break
 			}
 		}
@@ -88,7 +88,7 @@ func NewApp(boardSize int, filename string) (*App, error) {
 		board:    board,
 		gtp:      gtp,
 		br:       br,
-		kb:       LoadKeybindings("conf"),
+		kb:       LoadKeybindings(dataPath("conf")),
 	}
 
 	// Load SGF if provided
