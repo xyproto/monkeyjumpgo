@@ -98,6 +98,13 @@ func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error
 		}
 	}
 
+	// Ensure the window is visible and has an initial frame committed.
+	// On Wayland/Sway, the compositor won't map the window until a buffer is presented.
+	ren.SetDrawColor(0, 0, 0, 255)
+	ren.Clear()
+	ren.Present()
+	win.Show()
+
 	return app, nil
 }
 
@@ -115,49 +122,25 @@ func (a *App) Run() {
 	needsRedraw := false
 	running := true
 	for running {
-		// Process all pending events before redrawing
-		hadEvent := false
+		// Wait for an event (up to 16ms ≈ 60fps cap).
+		// SDL_WaitEventTimeout is compositor-friendly: it signals readiness for
+		// events instead of busy-polling, which avoids the window not being mapped.
+		ev, ok := waitEvent(16)
+		if ok {
+			if a.processEvent(ev, &needsRedraw) {
+				break
+			}
+		}
+
+		// Drain any remaining queued events before redrawing.
 		for {
 			ev, ok := pollEvent()
 			if !ok {
 				break
 			}
-			hadEvent = true
-
-			switch ev.Type {
-			case EventQuit:
+			if a.processEvent(ev, &needsRedraw) {
 				running = false
-
-			case EventKeyDown:
-				if a.handleKey(ev.Key) {
-					running = false
-				}
-				needsRedraw = true
-
-			case EventMouseButtonDown:
-				x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
-				a.board.CursorX = x
-				a.board.CursorY = y
-				if binding, ok := a.kb.Mouse[ev.Button]; ok {
-					if a.ExecuteBinding(binding, func() { a.br.Draw(a.board) }) {
-						running = false
-					}
-				}
-				needsRedraw = true
-
-			case EventMouseMotion:
-				x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
-				if x != a.board.CursorX || y != a.board.CursorY {
-					a.board.CursorX = x
-					a.board.CursorY = y
-					needsRedraw = true
-				}
-
-			case EventWindowEnter:
-				x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
-				a.board.CursorX = x
-				a.board.CursorY = y
-				needsRedraw = true
+				break
 			}
 		}
 
@@ -165,11 +148,47 @@ func (a *App) Run() {
 			a.br.Draw(a.board)
 			needsRedraw = false
 		}
-
-		if !hadEvent {
-			sdlDelay(16) // ~60fps idle
-		}
 	}
+}
+
+// processEvent handles a single event. Returns true if the app should quit.
+func (a *App) processEvent(ev Event, needsRedraw *bool) bool {
+	switch ev.Type {
+	case EventQuit:
+		return true
+
+	case EventKeyDown:
+		if a.handleKey(ev.Key) {
+			return true
+		}
+		*needsRedraw = true
+
+	case EventMouseButtonDown:
+		x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
+		a.board.CursorX = x
+		a.board.CursorY = y
+		if binding, ok := a.kb.Mouse[ev.Button]; ok {
+			if a.ExecuteBinding(binding, func() { a.br.Draw(a.board) }) {
+				return true
+			}
+		}
+		*needsRedraw = true
+
+	case EventMouseMotion:
+		x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
+		if x != a.board.CursorX || y != a.board.CursorY {
+			a.board.CursorX = x
+			a.board.CursorY = y
+			*needsRedraw = true
+		}
+
+	case EventWindowEnter:
+		x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
+		a.board.CursorX = x
+		a.board.CursorY = y
+		*needsRedraw = true
+	}
+	return false
 }
 
 // handleKey processes a key press. Returns true if the app should quit.

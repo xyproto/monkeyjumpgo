@@ -38,6 +38,14 @@ func createWindow(title string, width, height int) (*Window, error) {
 	return &Window{w: w}, nil
 }
 
+func (w *Window) Show() {
+	C.SDL_ShowWindow(w.w)
+}
+
+func (w *Window) Raise() {
+	C.SDL_RaiseWindow(w.w)
+}
+
 func (w *Window) Destroy() {
 	if w.w != nil {
 		C.SDL_DestroyWindow(w.w)
@@ -143,28 +151,44 @@ type Event struct {
 func pollEvent() (Event, bool) {
 	var ev C.SDL_Event
 	if C.SDL_PollEvent(&ev) {
-		etype := *(*C.Uint32)(unsafe.Pointer(&ev))
-		switch etype {
-		case C.SDL_EVENT_QUIT:
-			return Event{Type: EventQuit}, true
-		case C.SDL_EVENT_KEY_DOWN:
-			kev := (*C.SDL_KeyboardEvent)(unsafe.Pointer(&ev))
-			return Event{Type: EventKeyDown, Key: int(kev.scancode)}, true
-		case C.SDL_EVENT_MOUSE_MOTION:
-			mev := (*C.SDL_MouseMotionEvent)(unsafe.Pointer(&ev))
-			return Event{Type: EventMouseMotion, MouseX: float32(mev.x), MouseY: float32(mev.y)}, true
-		case C.SDL_EVENT_MOUSE_BUTTON_DOWN:
-			bev := (*C.SDL_MouseButtonEvent)(unsafe.Pointer(&ev))
-			return Event{Type: EventMouseButtonDown, MouseX: float32(bev.x), MouseY: float32(bev.y), Button: int(bev.button)}, true
-		case C.SDL_EVENT_WINDOW_MOUSE_ENTER, C.SDL_EVENT_WINDOW_FOCUS_GAINED, C.SDL_EVENT_WINDOW_EXPOSED:
-			// Re-query mouse position when window regains focus/mouse
-			var mx, my C.float
-			C.SDL_GetMouseState(&mx, &my)
-			return Event{Type: EventWindowEnter, MouseX: float32(mx), MouseY: float32(my)}, true
-		}
-		return Event{Type: EventNone}, true
+		return translateEvent(&ev), true
 	}
 	return Event{}, false
+}
+
+// waitEvent blocks up to timeoutMs for an event. More compositor-friendly than poll+delay.
+func waitEvent(timeoutMs int) (Event, bool) {
+	var ev C.SDL_Event
+	if C.SDL_WaitEventTimeout(&ev, C.Sint32(timeoutMs)) {
+		return translateEvent(&ev), true
+	}
+	return Event{}, false
+}
+
+func translateEvent(ev *C.SDL_Event) Event {
+	etype := *(*C.Uint32)(unsafe.Pointer(ev))
+	switch etype {
+	case C.SDL_EVENT_QUIT:
+		return Event{Type: EventQuit}
+	case C.SDL_EVENT_KEY_DOWN:
+		kev := (*C.SDL_KeyboardEvent)(unsafe.Pointer(ev))
+		return Event{Type: EventKeyDown, Key: int(kev.scancode)}
+	case C.SDL_EVENT_MOUSE_MOTION:
+		mev := (*C.SDL_MouseMotionEvent)(unsafe.Pointer(ev))
+		return Event{Type: EventMouseMotion, MouseX: float32(mev.x), MouseY: float32(mev.y)}
+	case C.SDL_EVENT_MOUSE_BUTTON_DOWN:
+		bev := (*C.SDL_MouseButtonEvent)(unsafe.Pointer(ev))
+		return Event{Type: EventMouseButtonDown, MouseX: float32(bev.x), MouseY: float32(bev.y), Button: int(bev.button)}
+	case C.SDL_EVENT_WINDOW_MOUSE_ENTER,
+		C.SDL_EVENT_WINDOW_FOCUS_GAINED,
+		C.SDL_EVENT_WINDOW_EXPOSED,
+		C.SDL_EVENT_WINDOW_SHOWN,
+		C.SDL_EVENT_WINDOW_RESTORED:
+		var mx, my C.float
+		C.SDL_GetMouseState(&mx, &my)
+		return Event{Type: EventWindowEnter, MouseX: float32(mx), MouseY: float32(my)}
+	}
+	return Event{Type: EventNone}
 }
 
 func sdlDelay(ms uint32) {
