@@ -463,7 +463,7 @@ func (b *Board) FutureWhite() {
 
 // Play100Moves plays 100 moves automatically (black via engine, white via engine).
 func (b *Board) Play100Moves(drawFn func()) {
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		b.GnuGoBlack()
 		if drawFn != nil {
 			drawFn()
@@ -598,4 +598,3 @@ func (b *Board) Console() {
 	}
 	b.syncFromEngine()
 }
-

@@ -210,8 +210,8 @@ func (a *Analyzer) voidLiberties() (*Surface, posSet) {
 func (a *Analyzer) blur4(surface *Surface, exclude posSet, divnum float64) *Surface {
 	w := a.size
 	result := newSurface(w)
-	for x := 0; x < w; x++ {
-		for y := 0; y < w; y++ {
+	for x := range w {
+		for y := range w {
 			if exclude[[2]int{x, y}] {
 				continue
 			}
@@ -234,8 +234,8 @@ func (a *Analyzer) blur4(surface *Surface, exclude posSet, divnum float64) *Surf
 func (a *Analyzer) combine(red, green, blue *Surface) *Surface {
 	w := a.size
 	result := newSurface(w)
-	for x := 0; x < w; x++ {
-		for y := 0; y < w; y++ {
+	for x := range w {
+		for y := range w {
 			r := red.getAt(x, y)[0]
 			g := green.getAt(x, y)[1]
 			b := blue.getAt(x, y)[2]
@@ -261,7 +261,7 @@ func (a *Analyzer) blurmore(surface *Surface, repeat int, divnum float64) (*Surf
 	var oldGpos *[2]int
 	bestcount := 0
 
-	for i := 0; i < repeat; i++ {
+	for range repeat {
 		surface = a.blur4(surface, nil, divnum)
 		if gpos != nil {
 			oldGpos = gpos
@@ -271,8 +271,8 @@ func (a *Analyzer) blurmore(surface *Surface, repeat int, divnum float64) (*Surf
 		oldBestcount := bestcount
 		bestcount = 0
 
-		for x := 0; x < w; x++ {
-			for y := 0; y < w; y++ {
+		for x := range w {
+			for y := range w {
 				c := surface.getAt(x, y)
 				g := (255.0 - c[0]*-0.1 + c[1]*0.8 + (255.0 - c[2]*-0.1)) / 3.0
 				g *= origBias
