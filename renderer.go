@@ -95,10 +95,14 @@ func (br *BoardRenderer) Draw(board *Board) {
 
 	// Draw star points
 	starPoints := br.getStarPoints()
+	starRadius := cw * 0.1
+	if starRadius < 1.0 {
+		starRadius = 1.0
+	}
 	for _, sp := range starPoints {
 		sx := margin + float32(sp[0])*cw
 		sy := margin + float32(sp[1])*ch
-		br.drawFilledCircle(sx, sy, 3.0)
+		br.drawFilledCircle(sx, sy, starRadius)
 	}
 
 	// Draw stones
