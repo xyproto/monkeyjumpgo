@@ -63,10 +63,10 @@ func (a *Analyzer) findFriends(pos [2]int) float64 {
 		for _, dy := range offsets {
 			check := [2]int{pos[0] + dx, pos[1] + dy}
 			if a.board.Stones[check] == Black {
-				if abs(dx) > 2 || abs(dy) > 2 {
+				if math.Abs(float64(dx)) > 2 || math.Abs(float64(dy)) > 2 {
 					friends += 0.5
 				} else {
-					friends += 1
+					friends++
 				}
 			}
 		}
@@ -81,22 +81,15 @@ func (a *Analyzer) findEnemies(pos [2]int) float64 {
 		for _, dy := range offsets {
 			check := [2]int{pos[0] + dx, pos[1] + dy}
 			if a.board.Stones[check] == White {
-				if abs(dx) > 2 || abs(dy) > 2 {
+				if math.Abs(float64(dx)) > 2 || math.Abs(float64(dy)) > 2 {
 					enemies += 0.5
 				} else {
-					enemies += 1
+					enemies++
 				}
 			}
 		}
 	}
 	return enemies
-}
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
 
 // Surface is a simple 2D grid of RGB values.
