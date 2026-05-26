@@ -228,9 +228,29 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 
 	// Placing stones and playing
 	case "playblack":
-		a.board.PlayBlackThenEngine(drawFn)
+		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
+		if experimental {
+			if a.board.ToggleBlack() {
+				if drawFn != nil {
+					drawFn()
+				}
+				a.board.MyPlay("white", drawFn)
+			}
+		} else {
+			a.board.PlayBlackThenEngine(drawFn)
+		}
 	case "playwhite":
-		a.board.PlayWhiteThenEngine(drawFn)
+		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
+		if experimental {
+			if a.board.ToggleWhite() {
+				if drawFn != nil {
+					drawFn()
+				}
+				a.board.MyPlay("black", drawFn)
+			}
+		} else {
+			a.board.PlayWhiteThenEngine(drawFn)
+		}
 	case "myplay":
 		color := "white"
 		if len(b.Args) > 0 {
@@ -265,6 +285,12 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		if a.board.filename != "" {
 			a.board.LoadSGF(a.board.filename)
 		}
+	case "loadsgf":
+		fn := ""
+		if len(b.Args) > 0 {
+			fn = b.Args[0]
+		}
+		a.board.LoadSGF(fn)
 	case "next":
 		a.board.NextMove()
 	case "previous":
@@ -326,6 +352,10 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		a.board.Clear()
 	case "console":
 		a.board.Console()
+	case "liststones":
+		a.board.ListStones()
+	case "playguess":
+		a.board.PlayGuess()
 	case "save":
 		fn := "goboard.bmp"
 		if len(b.Args) > 0 {
@@ -339,9 +369,29 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 
 	// Game management
 	case "newasblack":
-		a.board.NewAsBlack(drawFn)
+		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
+		a.board.Clear()
+		a.board.NextLevel()
+		if drawFn != nil {
+			drawFn()
+		}
+		if experimental {
+			a.board.MyPlay("white", drawFn)
+		} else {
+			a.board.GnuGoWhite()
+		}
 	case "newaswhite":
-		a.board.NewAsWhite(drawFn)
+		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
+		a.board.Clear()
+		a.board.NextLevel()
+		if drawFn != nil {
+			drawFn()
+		}
+		if experimental {
+			a.board.MyPlay("black", drawFn)
+		} else {
+			a.board.GnuGoBlack()
+		}
 	case "status":
 		a.board.Status()
 	}
