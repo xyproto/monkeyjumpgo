@@ -80,7 +80,7 @@ Configuration:
 			fmt.Printf("monkeyjump %s\n", version)
 			os.Exit(0)
 		case "--tiny":
-			winSize = defaultWinSize / 10
+			winSize = 100
 		default:
 			if n, err := strconv.Atoi(arg); err == nil {
 				boardSize = n
