@@ -17,7 +17,7 @@ type App struct {
 	kb       *Keybindings
 }
 
-func NewApp(boardSize int, filename string) (*App, error) {
+func NewApp(boardSize int, filename string, winSize int) (*App, error) {
 	if err := sdlInit(); err != nil {
 		return nil, err
 	}
@@ -27,7 +27,7 @@ func NewApp(boardSize int, filename string) (*App, error) {
 		title += " - " + filepath.Base(filename)
 	}
 
-	win, err := createWindow(title, windowWidth, windowHeight)
+	win, err := createWindow(title, winSize, winSize)
 	if err != nil {
 		sdlQuit()
 		return nil, err
@@ -73,7 +73,7 @@ func NewApp(boardSize int, filename string) (*App, error) {
 		}
 	}
 
-	br, err := NewBoardRenderer(ren, boardSize, windowWidth, windowHeight, themeDir)
+	br, err := NewBoardRenderer(ren, boardSize, winSize, winSize, themeDir)
 	if err != nil {
 		gtp.Close()
 		ren.Destroy()

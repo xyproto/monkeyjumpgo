@@ -9,13 +9,13 @@ import (
 
 const (
 	defaultBoardSize = 9
-	windowWidth      = 512
-	windowHeight     = 512
+	defaultWinSize   = 512
 	version          = "1.0.0"
 )
 
 func main() {
 	boardSize := defaultBoardSize
+	winSize := defaultWinSize
 	var filename string
 
 	for _, arg := range os.Args[1:] {
@@ -29,6 +29,7 @@ Usage:
 Options:
   --help, -h       Show this help message
   --version, -v    Show version information
+  --tiny           Render at 1/10th size (tiny window)
 
 Arguments:
   BOARD_SIZE       Board size (9, 13, or 19; default: 9)
@@ -78,6 +79,8 @@ Configuration:
 		case "--version", "-v":
 			fmt.Printf("monkeyjump %s\n", version)
 			os.Exit(0)
+		case "--tiny":
+			winSize = defaultWinSize / 10
 		default:
 			if n, err := strconv.Atoi(arg); err == nil {
 				boardSize = n
@@ -102,7 +105,7 @@ Configuration:
 		}
 	}
 
-	app, err := NewApp(boardSize, filename)
+	app, err := NewApp(boardSize, filename, winSize)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
