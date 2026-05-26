@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -30,9 +32,12 @@ type Board struct {
 	hasLast    bool
 	level      int
 	illegalOK  bool
+	lastPlayed string // "B" or "W"
 	// SGF replay
 	history      []string // e.g. "BD4", "WQ16"
 	historyIndex int
+	guessCounter int
+	filename     string
 }
 
 // Letters used for Go coordinates (skipping 'I')
@@ -45,6 +50,7 @@ func NewBoard(size int, gtp *GTP) *Board {
 		gtp:          gtp,
 		level:        9,
 		historyIndex: -1,
+		lastPlayed:   "W",
 	}
 	gtp.Send(fmt.Sprintf("boardsize %d", size))
 	gtp.Send("clear_board")
@@ -395,3 +401,201 @@ func (b *Board) PreviousMove() {
 	b.gtp.Send("undo")
 	b.syncFromEngine()
 }
+
+// JumpPos jumps the cursor to a specific board position (1-based).
+func (b *Board) JumpPos(x, y int) {
+	bx := x - 1
+	by := y - 1
+	if bx < 0 {
+		bx = 0
+	}
+	if bx >= b.Size {
+		bx = b.Size - 1
+	}
+	if by < 0 {
+		by = 0
+	}
+	if by >= b.Size {
+		by = b.Size - 1
+	}
+	b.CursorX = bx
+	b.CursorY = by
+}
+
+// TimeSettings sets time controls.
+func (b *Board) TimeSettings(mainTime, byoYomiTime, byoYomiStones int) {
+	b.gtp.Send(fmt.Sprintf("time_settings %d %d %d", mainTime, byoYomiTime, byoYomiStones))
+	fmt.Printf("Time settings: main=%d byo_yomi=%d stones=%d\n", mainTime, byoYomiTime, byoYomiStones)
+}
+
+// NextLevel cycles through GnuGo difficulty levels.
+func (b *Board) NextLevel() {
+	b.level += 3
+	if b.level > 9 {
+		b.level = 0
+	}
+	b.SetLevel(b.level)
+	fmt.Println("Level:", b.level)
+}
+
+// FutureWhite shows top engine moves as gray markers.
+func (b *Board) FutureWhite() {
+	// Generate a move, get top candidates, then undo
+	b.gtp.Send("genmove white")
+	topMoves := b.gtp.SendExtract("top_moves_white")
+	b.gtp.Send("undo")
+
+	// Parse positions (format: "D4 0.85 E5 0.72 ...")
+	fields := strings.Fields(topMoves)
+	for i := 0; i < len(fields); i += 2 {
+		pos := fields[i]
+		x, y, err := b.GTPToNum(pos)
+		if err == nil {
+			// Mark with a special "gray" stone to indicate suggestion
+			if _, exists := b.Stones[[2]int{x, y}]; !exists {
+				b.Stones[[2]int{x, y}] = Empty // placeholder for marker
+			}
+		}
+	}
+	// Actually just print them; rendering markers would need a new stone type
+	fmt.Println("Top moves (white):", topMoves)
+}
+
+// Play100Moves plays 100 moves automatically (black via engine, white via engine).
+func (b *Board) Play100Moves(drawFn func()) {
+	for i := 0; i < 100; i++ {
+		b.GnuGoBlack()
+		if drawFn != nil {
+			drawFn()
+		}
+		score := b.gtp.SendExtract("estimate_score")
+		fmt.Printf("Move %d: %s\n", i*2+1, score)
+		b.GnuGoWhite()
+		if drawFn != nil {
+			drawFn()
+		}
+	}
+	fmt.Println("Done with 100 moves")
+}
+
+// MultiGTP sends a command and prints multi-line results.
+func (b *Board) MultiGTP(cmd string) {
+	resp := b.gtp.SendExtract(cmd)
+	fmt.Println(resp)
+}
+
+// NewAsBlack clears the board, cycles level, and has GnuGo play first as white.
+func (b *Board) NewAsBlack(drawFn func()) {
+	b.Clear()
+	b.NextLevel()
+	if drawFn != nil {
+		drawFn()
+	}
+	b.GnuGoWhite()
+}
+
+// NewAsWhite clears the board, cycles level, and has GnuGo play first as black.
+func (b *Board) NewAsWhite(drawFn func()) {
+	b.Clear()
+	b.NextLevel()
+	if drawFn != nil {
+		drawFn()
+	}
+	b.GnuGoBlack()
+}
+
+// ListStones prints all stones on the board.
+func (b *Board) ListStones() {
+	fmt.Println("Black:", b.gtp.SendExtract("list_stones black"))
+	fmt.Println("White:", b.gtp.SendExtract("list_stones white"))
+}
+
+// NextOrLoad advances in SGF history, or reloads the file if no history.
+func (b *Board) NextOrLoad() {
+	if len(b.history) > 0 {
+		b.NextMove()
+	} else if b.filename != "" {
+		b.LoadSGF(b.filename)
+	}
+}
+
+// GuessOrPlace either guesses the next SGF move or alternates stone placement.
+func (b *Board) GuessOrPlace() {
+	if len(b.history) > 0 {
+		b.PlayGuess()
+	} else {
+		if b.lastPlayed == "B" {
+			if b.ToggleWhite() {
+				b.lastPlayed = "W"
+			}
+		} else {
+			if b.ToggleBlack() {
+				b.lastPlayed = "B"
+			}
+		}
+	}
+}
+
+// PlayGuess checks if the cursor matches the next SGF move.
+func (b *Board) PlayGuess() {
+	if b.historyIndex+1 >= len(b.history) {
+		return
+	}
+	colorPos := b.history[b.historyIndex+1]
+	if len(colorPos) < 2 {
+		return
+	}
+	expectedPos := colorPos[1:]
+	cursorPos := b.NumToGTP(b.CursorX, b.CursorY)
+	if cursorPos == expectedPos {
+		if b.guessCounter > 1 {
+			fmt.Printf("Guessed the next move in %d clicks!\n", b.guessCounter)
+		}
+		b.guessCounter = 0
+		b.NextMove()
+	} else {
+		b.guessCounter++
+	}
+}
+
+// Status shows the last move, score estimate, and level.
+func (b *Board) Status() {
+	b.ShowLastMove()
+	score := b.EstimateScore()
+	fmt.Printf("Score: %s | Level: %d\n", score, b.level)
+}
+
+// GnuGoInfo prints engine name, version, and settings.
+func (b *Board) GnuGoInfo() {
+	fmt.Println("Name:", b.gtp.SendExtract("name"))
+	fmt.Println("Version:", b.gtp.SendExtract("version"))
+	fmt.Println("Protocol:", b.gtp.SendExtract("protocol_version"))
+	fmt.Println("Board size:", b.gtp.SendExtract("query_boardsize"))
+	fmt.Println("Komi:", b.gtp.SendExtract("get_komi"))
+}
+
+// Console enters an interactive GTP command mode reading from stdin.
+func (b *Board) Console() {
+	fmt.Println("\nGTP Console (type 'exit' or 'quit' to return to game)")
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("# ")
+		if !scanner.Scan() {
+			break
+		}
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if line == "exit" || line == "quit" {
+			fmt.Println("Done with console.")
+			break
+		}
+		resp := b.gtp.SendExtract(line)
+		if resp != "" {
+			fmt.Println(resp)
+		}
+	}
+	b.syncFromEngine()
+}
+

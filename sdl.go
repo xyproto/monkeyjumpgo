@@ -166,6 +166,21 @@ func sdlDelay(ms uint32) {
 	C.SDL_Delay(C.Uint32(ms))
 }
 
+// SaveScreenshot captures the current render output and saves it as a BMP file.
+func (r *Renderer) SaveScreenshot(filename string) error {
+	surf := C.SDL_RenderReadPixels(r.r, nil)
+	if surf == nil {
+		return fmt.Errorf("SDL_RenderReadPixels: %s", C.GoString(C.SDL_GetError()))
+	}
+	defer C.SDL_DestroySurface(surf)
+	cname := C.CString(filename)
+	defer C.free(unsafe.Pointer(cname))
+	if !C.SDL_SaveBMP(surf, cname) {
+		return fmt.Errorf("SDL_SaveBMP: %s", C.GoString(C.SDL_GetError()))
+	}
+	return nil
+}
+
 // SDL3 scancodes
 const (
 	ScancodeEscape    = C.SDL_SCANCODE_ESCAPE
@@ -212,4 +227,14 @@ const (
 	ScancodeF2        = C.SDL_SCANCODE_F2
 	ScancodeF3        = C.SDL_SCANCODE_F3
 	ScancodeF12       = C.SDL_SCANCODE_F12
+	ScancodeKP0       = C.SDL_SCANCODE_KP_0
+	ScancodeKP1       = C.SDL_SCANCODE_KP_1
+	ScancodeKP2       = C.SDL_SCANCODE_KP_2
+	ScancodeKP3       = C.SDL_SCANCODE_KP_3
+	ScancodeKP4       = C.SDL_SCANCODE_KP_4
+	ScancodeKP5       = C.SDL_SCANCODE_KP_5
+	ScancodeKP6       = C.SDL_SCANCODE_KP_6
+	ScancodeKP7       = C.SDL_SCANCODE_KP_7
+	ScancodeKP8       = C.SDL_SCANCODE_KP_8
+	ScancodeKP9       = C.SDL_SCANCODE_KP_9
 )

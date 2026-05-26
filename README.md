@@ -42,7 +42,7 @@ go build
 |-----|--------|
 | Arrow keys | Move cursor |
 | Space | Play black + GnuGo responds as white |
-| Tab | Play white + GnuGo responds as black |
+| Tab | My play (analyzer/engine) as white |
 | Return | Ask GnuGo to play white |
 | m | Ask GnuGo to play black |
 | w | Place white stone (no response) |
@@ -59,17 +59,42 @@ go build
 | s | Save SGF |
 | l | Reload SGF |
 | i | Toggle illegal moves |
-| Backspace | Clear board |
+| c | GTP console |
+| o | Show future white moves |
+| t | Set time (5s) |
+| x | Show move probabilities |
+| y | Play 100 auto-moves |
+| Numpad 1-9 | Jump to board positions |
+| Numpad 0 | Set level 0 |
 | 1-9, 0 | Set GnuGo level (0=level 10) |
+| F1 | GnuGo engine info |
+| F2 | Analyze (liberty-based move suggestion) |
+| F3 | Show dragons |
+| F12 | Save screenshot (BMP) |
+| Backspace | Clear board |
 | q / Escape | Quit |
+
+### Mouse
+
+| Button | Action |
+|--------|--------|
 | Left click | Play black at position |
-| Right click | Estimate score |
+| Middle click | New game as black |
+| Right click | Show status (score + level) |
 
 ## Configuration
 
 - `conf/gnugocmd.conf` — GTP engine command (default: `gnugo --mode gtp`)
 - `conf/theme.conf` — Theme name (default: `uligo`)
-- `themes/` — Board and stone images
+- `conf/keybindings.conf` — Keybinding reference (read-only)
+- `themes/` — Board and stone images (uligo, plain, spreadsheet)
+
+## Themes
+
+Three themes are included:
+- **uligo** — Wooden board with realistic stones
+- **plain** — Simple flat design
+- **spreadsheet** — Minimalist grid style
 
 ## License
 

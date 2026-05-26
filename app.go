@@ -14,7 +14,6 @@ type App struct {
 	board    *Board
 	gtp      *GTP
 	br       *BoardRenderer
-	filename string
 }
 
 func NewApp(boardSize int, filename string) (*App, error) {
@@ -88,7 +87,6 @@ func NewApp(boardSize int, filename string) (*App, error) {
 		board:    board,
 		gtp:      gtp,
 		br:       br,
-		filename: filename,
 	}
 
 	// Load SGF if provided
@@ -140,9 +138,10 @@ func (a *App) Run() {
 				a.board.CursorY = y
 				if ev.Button == 1 { // Left click: play black
 					a.board.PlayBlackThenEngine(func() { a.br.Draw(a.board) })
+				} else if ev.Button == 2 { // Middle click: new game as black
+					a.board.NewAsBlack(func() { a.br.Draw(a.board) })
 				} else if ev.Button == 3 { // Right click: show status
-					score := a.board.EstimateScore()
-					fmt.Println("Score:", score)
+					a.board.Status()
 				}
 				needsRedraw = true
 
@@ -174,6 +173,8 @@ func (a *App) handleKey(scancode int) bool {
 	case ScancodeEscape, ScancodeQ:
 		a.board.ShowBoard()
 		return true
+
+	// Cursor movement
 	case ScancodeLeft:
 		a.board.MoveCursor(-1, 0)
 	case ScancodeRight:
@@ -182,10 +183,32 @@ func (a *App) handleKey(scancode int) bool {
 		a.board.MoveCursor(0, -1)
 	case ScancodeDown:
 		a.board.MoveCursor(0, 1)
+
+	// Numpad jump positions (for 19x19 board positions)
+	case ScancodeKP1:
+		a.board.JumpPos(4, 16)
+	case ScancodeKP2:
+		a.board.JumpPos(10, 16)
+	case ScancodeKP3:
+		a.board.JumpPos(16, 16)
+	case ScancodeKP4:
+		a.board.JumpPos(4, 10)
+	case ScancodeKP5:
+		a.board.JumpPos(10, 10)
+	case ScancodeKP6:
+		a.board.JumpPos(16, 10)
+	case ScancodeKP7:
+		a.board.JumpPos(4, 4)
+	case ScancodeKP8:
+		a.board.JumpPos(10, 4)
+	case ScancodeKP9:
+		a.board.JumpPos(16, 4)
+
+	// Placing stones and playing
 	case ScancodeSpace:
 		a.board.PlayBlackThenEngine(draw)
 	case ScancodeTab:
-		a.board.PlayWhiteThenEngine(draw)
+		a.board.MyPlay("white", draw)
 	case ScancodeReturn:
 		a.board.GnuGoWhite()
 	case ScancodeM:
@@ -202,30 +225,26 @@ func (a *App) handleKey(scancode int) bool {
 		a.board.PassWhite()
 	case ScancodeG:
 		a.board.ShowLastMove()
-	case ScancodeV:
-		a.board.ShowBoard()
-	case ScancodeE:
-		score := a.board.EstimateScore()
-		fmt.Println("Estimated score:", score)
-	case ScancodeF:
-		score := a.board.FinalScore()
-		fmt.Println("Final score:", score)
+
+	// SGF-related
+	case ScancodeS:
+		a.board.SaveSGF("saved.sgf")
+	case ScancodeL:
+		if a.board.filename != "" {
+			a.board.LoadSGF(a.board.filename)
+		}
 	case ScancodeN:
 		a.board.NextMove()
 	case ScancodeP:
 		a.board.PreviousMove()
-	case ScancodeS:
-		a.board.SaveSGF("saved.sgf")
-	case ScancodeL:
-		if a.filename != "" {
-			a.board.LoadSGF(a.filename)
-		}
-	case ScancodeI:
-		a.board.ToggleIllegal()
-	case ScancodeBackspace:
-		a.board.Clear()
-	case Scancode0:
-		a.board.SetLevel(10)
+
+	// GnuGo commands
+	case ScancodeF1:
+		a.board.GnuGoInfo()
+	case ScancodeV:
+		a.board.ShowBoard()
+	case ScancodeKP0:
+		a.board.SetLevel(0)
 	case Scancode1:
 		a.board.SetLevel(1)
 	case Scancode2:
@@ -244,9 +263,44 @@ func (a *App) handleKey(scancode int) bool {
 		a.board.SetLevel(8)
 	case Scancode9:
 		a.board.SetLevel(9)
-	case ScancodeF1:
-		a.board.gtp.Send("name")
-		a.board.gtp.Send("version")
+	case Scancode0:
+		a.board.SetLevel(10)
+	case ScancodeT:
+		a.board.TimeSettings(5, 0, 0)
+	case ScancodeY:
+		a.board.Play100Moves(draw)
+	case ScancodeO:
+		a.board.FutureWhite()
+
+	// GTP commands
+	case ScancodeE:
+		score := a.board.EstimateScore()
+		fmt.Println("Estimated score:", score)
+	case ScancodeF:
+		score := a.board.FinalScore()
+		fmt.Println("Final score:", score)
+	case ScancodeX:
+		a.board.MultiGTP("move_probabilities")
+	case ScancodeF3:
+		a.board.MultiGTP("dragon_status")
+		a.board.MultiGTP("show_dragons")
+	case ScancodeF2:
+		// Analyze: use liberty-based heuristic to suggest and play a move
+		a.board.Analyze(draw)
+
+	// Special functions
+	case ScancodeI:
+		a.board.ToggleIllegal()
+	case ScancodeBackspace:
+		a.board.Clear()
+	case ScancodeC:
+		a.board.Console()
+	case ScancodeF12:
+		if err := a.renderer.SaveScreenshot("goboard.bmp"); err != nil {
+			fmt.Fprintf(os.Stderr, "Screenshot failed: %v\n", err)
+		} else {
+			fmt.Println("Saved: goboard.bmp")
+		}
 	}
 	return false
 }

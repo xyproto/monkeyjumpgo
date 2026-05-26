@@ -10,6 +10,14 @@ import (
 // SGF loading
 
 func (b *Board) LoadSGF(filename string) error {
+	if filename != "" {
+		b.filename = filename
+	} else if b.filename != "" {
+		filename = b.filename
+	} else {
+		return fmt.Errorf("no filename specified")
+	}
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
