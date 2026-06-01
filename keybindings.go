@@ -237,7 +237,9 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 				a.board.MyPlay("white", drawFn)
 			}
 		} else {
-			a.board.PlayBlackThenEngine(drawFn)
+			if a.board.PlayBlackThenEngine(a.gtpDone) {
+				a.thinking = true
+			}
 		}
 	case "playwhite":
 		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
@@ -249,7 +251,9 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 				a.board.MyPlay("black", drawFn)
 			}
 		} else {
-			a.board.PlayWhiteThenEngine(drawFn)
+			if a.board.PlayWhiteThenEngine(a.gtpDone) {
+				a.thinking = true
+			}
 		}
 	case "myplay":
 		color := "white"
@@ -258,9 +262,9 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		}
 		a.board.MyPlay(color, drawFn)
 	case "gnugowhite":
-		a.board.GnuGoWhite(drawFn)
+		a.board.GnuGoWhite()
 	case "gnugoblack":
-		a.board.GnuGoBlack(drawFn)
+		a.board.GnuGoBlack()
 	case "togglewhite":
 		a.board.ToggleWhite()
 	case "toggleblack":
@@ -378,7 +382,7 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		if experimental {
 			a.board.MyPlay("white", drawFn)
 		} else {
-			a.board.GnuGoWhite(drawFn)
+			a.board.GnuGoWhite()
 		}
 	case "newaswhite":
 		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
@@ -390,7 +394,7 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		if experimental {
 			a.board.MyPlay("black", drawFn)
 		} else {
-			a.board.GnuGoBlack(drawFn)
+			a.board.GnuGoBlack()
 		}
 	case "status":
 		a.board.Status()

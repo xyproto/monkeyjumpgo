@@ -142,20 +142,22 @@ func (b *Board) MoveCursor(dx, dy int) {
 }
 
 // PlayBlackThenEngine places a black stone and asks GnuGo to respond as white.
-func (b *Board) PlayBlackThenEngine(drawFn func()) {
+// The engine move runs asynchronously; done is signaled when complete.
+// Returns true if the async engine move was started.
+func (b *Board) PlayBlackThenEngine(done chan<- struct{}) bool {
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	if pos == "" {
-		return
+		return false
 	}
 	// Skip if position is already occupied (handles double-clicks/queued events)
 	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
-		return
+		return false
 	}
 	resp := b.gtp.Send(fmt.Sprintf("play black %s", pos))
 	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
 		if !b.illegalOK {
 			fmt.Println("Illegal move:", pos)
-			return
+			return false
 		}
 		fmt.Println("Illegal move (forced):", pos)
 	}
@@ -163,39 +165,42 @@ func (b *Board) PlayBlackThenEngine(drawFn func()) {
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
 	b.hasLast = true
 	b.checkCaptures()
-	// Show the player's stone before engine thinks
-	if drawFn != nil {
-		drawFn()
-	}
-	b.GnuGoWhite(drawFn)
+	// Engine responds asynchronously
+	go func() {
+		b.GnuGoWhite()
+		done <- struct{}{}
+	}()
+	return true
 }
 
 // PlayWhiteThenEngine places a white stone and asks GnuGo to respond as black.
-func (b *Board) PlayWhiteThenEngine(drawFn func()) {
+// Returns true if the async engine move was started.
+func (b *Board) PlayWhiteThenEngine(done chan<- struct{}) bool {
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	if pos == "" {
-		return
+		return false
 	}
 	// Skip if position is already occupied
 	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
-		return
+		return false
 	}
 	resp := b.gtp.Send(fmt.Sprintf("play white %s", pos))
 	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
 		if !b.illegalOK {
 			fmt.Println("Illegal move:", pos)
-			return
+			return false
 		}
 	}
 	b.Stones[[2]int{b.CursorX, b.CursorY}] = White
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
 	b.hasLast = true
 	b.checkCaptures()
-	// Show the player's stone before engine thinks
-	if drawFn != nil {
-		drawFn()
-	}
-	b.GnuGoBlack(drawFn)
+	// Engine responds asynchronously
+	go func() {
+		b.GnuGoBlack()
+		done <- struct{}{}
+	}()
+	return true
 }
 
 // ToggleBlack places a black stone at cursor (no engine response).
@@ -226,7 +231,7 @@ func (b *Board) ToggleWhite() bool {
 	return true
 }
 
-func (b *Board) GnuGoWhite(drawFn func()) {
+func (b *Board) GnuGoWhite() {
 	move := b.gtp.SendExtract("genmove white")
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
@@ -234,12 +239,9 @@ func (b *Board) GnuGoWhite(drawFn func()) {
 		return
 	}
 	b.placeGTPMove(White, move)
-	if drawFn != nil {
-		drawFn()
-	}
 }
 
-func (b *Board) GnuGoBlack(drawFn func()) {
+func (b *Board) GnuGoBlack() {
 	move := b.gtp.SendExtract("genmove black")
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
@@ -247,9 +249,6 @@ func (b *Board) GnuGoBlack(drawFn func()) {
 		return
 	}
 	b.placeGTPMove(Black, move)
-	if drawFn != nil {
-		drawFn()
-	}
 }
 
 func (b *Board) placeGTPMove(color StoneColor, pos string) {
@@ -311,12 +310,12 @@ func (b *Board) Undo() {
 
 func (b *Board) PassBlack() {
 	b.gtp.Send("play black PASS")
-	b.GnuGoWhite(nil)
+	b.GnuGoWhite()
 }
 
 func (b *Board) PassWhite() {
 	b.gtp.Send("play white PASS")
-	b.GnuGoBlack(nil)
+	b.GnuGoBlack()
 }
 
 func (b *Board) Clear() {
@@ -476,13 +475,13 @@ func (b *Board) FutureWhite() {
 // Play100Moves plays 100 moves automatically (black via engine, white via engine).
 func (b *Board) Play100Moves(drawFn func()) {
 	for i := range 100 {
-		b.GnuGoBlack(drawFn)
+		b.GnuGoBlack()
 		if drawFn != nil {
 			drawFn()
 		}
 		score := b.gtp.SendExtract("estimate_score")
 		fmt.Printf("Move %d: %s\n", i*2+1, score)
-		b.GnuGoWhite(drawFn)
+		b.GnuGoWhite()
 		if drawFn != nil {
 			drawFn()
 		}
@@ -503,7 +502,7 @@ func (b *Board) NewAsBlack(drawFn func()) {
 	if drawFn != nil {
 		drawFn()
 	}
-	b.GnuGoWhite(drawFn)
+	b.GnuGoWhite()
 }
 
 // NewAsWhite clears the board, cycles level, and has GnuGo play first as black.
@@ -513,7 +512,7 @@ func (b *Board) NewAsWhite(drawFn func()) {
 	if drawFn != nil {
 		drawFn()
 	}
-	b.GnuGoBlack(drawFn)
+	b.GnuGoBlack()
 }
 
 // ListStones prints all stones on the board.

@@ -15,6 +15,10 @@ type App struct {
 	gtp      *GTP
 	br       *BoardRenderer
 	kb       *Keybindings
+	// Channel for receiving results from async GTP operations
+	gtpDone chan struct{}
+	// Whether the engine is currently thinking
+	thinking bool
 }
 
 func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error) {
@@ -89,6 +93,7 @@ func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error
 		gtp:      gtp,
 		br:       br,
 		kb:       LoadKeybindings(dataPath("conf")),
+		gtpDone:  make(chan struct{}, 1),
 	}
 
 	// Load SGF if provided
@@ -122,17 +127,15 @@ func (a *App) Run() {
 	needsRedraw := false
 	running := true
 	for running {
-		// Wait for an event (up to 16ms ≈ 60fps cap).
-		// SDL_WaitEventTimeout is compositor-friendly: it signals readiness for
-		// events instead of busy-polling, which avoids the window not being mapped.
-		ev, ok := waitEvent(16)
-		if ok {
-			if a.processEvent(ev, &needsRedraw) {
-				break
-			}
+		// Check if async GTP operation completed
+		select {
+		case <-a.gtpDone:
+			a.thinking = false
+			needsRedraw = true
+		default:
 		}
 
-		// Drain any remaining queued events before redrawing.
+		// Drain all pending events
 		for {
 			ev, ok := pollEvent()
 			if !ok {
@@ -148,6 +151,9 @@ func (a *App) Run() {
 			a.br.Draw(a.board)
 			needsRedraw = false
 		}
+
+		// Small sleep to avoid burning CPU. Short enough to stay responsive.
+		sdlDelay(8)
 	}
 }
 
@@ -158,12 +164,20 @@ func (a *App) processEvent(ev Event, needsRedraw *bool) bool {
 		return true
 
 	case EventKeyDown:
+		// Ignore input while engine is thinking
+		if a.thinking {
+			return false
+		}
 		if a.handleKey(ev.Key) {
 			return true
 		}
 		*needsRedraw = true
 
 	case EventMouseButtonDown:
+		// Ignore clicks while engine is thinking
+		if a.thinking {
+			return false
+		}
 		x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
 		a.board.CursorX = x
 		a.board.CursorY = y

@@ -363,11 +363,11 @@ func (b *Board) Analyze(drawFn func()) {
 			if drawFn != nil {
 				drawFn()
 			}
-			b.GnuGoWhite(drawFn)
+			b.GnuGoWhite()
 		}
 	} else {
 		fmt.Println("Analyzer: no suggestion found, using GnuGo")
-		b.GnuGoBlack(drawFn)
+		b.GnuGoBlack()
 	}
 }
 
@@ -412,8 +412,8 @@ func (b *Board) MyPlay(color string, drawFn func()) {
 
 	// Fall back to GnuGo
 	if color == "white" || color == "W" {
-		b.GnuGoWhite(drawFn)
+		b.GnuGoWhite()
 	} else {
-		b.GnuGoBlack(drawFn)
+		b.GnuGoBlack()
 	}
 }

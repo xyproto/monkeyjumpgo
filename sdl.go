@@ -156,15 +156,6 @@ func pollEvent() (Event, bool) {
 	return Event{}, false
 }
 
-// waitEvent blocks up to timeoutMs for an event. More compositor-friendly than poll+delay.
-func waitEvent(timeoutMs int) (Event, bool) {
-	var ev C.SDL_Event
-	if C.SDL_WaitEventTimeout(&ev, C.Sint32(timeoutMs)) {
-		return translateEvent(&ev), true
-	}
-	return Event{}, false
-}
-
 func translateEvent(ev *C.SDL_Event) Event {
 	etype := *(*C.Uint32)(unsafe.Pointer(ev))
 	switch etype {
