@@ -18,6 +18,15 @@ type GTP struct {
 	cmdNum int
 }
 
+// Busy returns true if the GTP engine is currently processing a command.
+func (g *GTP) Busy() bool {
+	if g.mu.TryLock() {
+		g.mu.Unlock()
+		return false
+	}
+	return true
+}
+
 func NewGTP(command string) (*GTP, error) {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {

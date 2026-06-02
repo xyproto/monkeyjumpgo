@@ -15,10 +15,6 @@ type App struct {
 	gtp      *GTP
 	br       *BoardRenderer
 	kb       *Keybindings
-	// Channel for receiving results from async GTP operations
-	gtpDone chan struct{}
-	// Whether the engine is currently thinking
-	thinking bool
 }
 
 func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error) {
@@ -93,7 +89,6 @@ func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error
 		gtp:      gtp,
 		br:       br,
 		kb:       LoadKeybindings(dataPath("conf")),
-		gtpDone:  make(chan struct{}, 1),
 	}
 
 	// Load SGF if provided
@@ -127,14 +122,6 @@ func (a *App) Run() {
 	needsRedraw := false
 	running := true
 	for running {
-		// Check if async GTP operation completed
-		select {
-		case <-a.gtpDone:
-			a.thinking = false
-			needsRedraw = true
-		default:
-		}
-
 		// Drain all pending events
 		for {
 			ev, ok := pollEvent()
@@ -164,20 +151,12 @@ func (a *App) processEvent(ev Event, needsRedraw *bool) bool {
 		return true
 
 	case EventKeyDown:
-		// Ignore input while engine is thinking
-		if a.thinking {
-			return false
-		}
 		if a.handleKey(ev.Key) {
 			return true
 		}
 		*needsRedraw = true
 
 	case EventMouseButtonDown:
-		// Ignore clicks while engine is thinking
-		if a.thinking {
-			return false
-		}
 		x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
 		a.board.CursorX = x
 		a.board.CursorY = y

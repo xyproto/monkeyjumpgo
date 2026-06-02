@@ -142,22 +142,25 @@ func (b *Board) MoveCursor(dx, dy int) {
 }
 
 // PlayBlackThenEngine places a black stone and asks GnuGo to respond as white.
-// The engine move runs asynchronously; done is signaled when complete.
-// Returns true if the async engine move was started.
-func (b *Board) PlayBlackThenEngine(done chan<- struct{}) bool {
+// Returns immediately if the engine is busy (still thinking from a previous move).
+func (b *Board) PlayBlackThenEngine() {
+	// Don't block if engine is still processing
+	if b.gtp.Busy() {
+		return
+	}
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	if pos == "" {
-		return false
+		return
 	}
 	// Skip if position is already occupied (handles double-clicks/queued events)
 	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
-		return false
+		return
 	}
 	resp := b.gtp.Send(fmt.Sprintf("play black %s", pos))
 	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
 		if !b.illegalOK {
 			fmt.Println("Illegal move:", pos)
-			return false
+			return
 		}
 		fmt.Println("Illegal move (forced):", pos)
 	}
@@ -165,42 +168,35 @@ func (b *Board) PlayBlackThenEngine(done chan<- struct{}) bool {
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
 	b.hasLast = true
 	b.checkCaptures()
-	// Engine responds asynchronously
-	go func() {
-		b.GnuGoWhite()
-		done <- struct{}{}
-	}()
-	return true
+	// Engine responds asynchronously to keep UI responsive
+	go b.GnuGoWhite()
 }
 
 // PlayWhiteThenEngine places a white stone and asks GnuGo to respond as black.
-// Returns true if the async engine move was started.
-func (b *Board) PlayWhiteThenEngine(done chan<- struct{}) bool {
+func (b *Board) PlayWhiteThenEngine() {
+	if b.gtp.Busy() {
+		return
+	}
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	if pos == "" {
-		return false
+		return
 	}
 	// Skip if position is already occupied
 	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
-		return false
+		return
 	}
 	resp := b.gtp.Send(fmt.Sprintf("play white %s", pos))
 	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
 		if !b.illegalOK {
 			fmt.Println("Illegal move:", pos)
-			return false
+			return
 		}
 	}
 	b.Stones[[2]int{b.CursorX, b.CursorY}] = White
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
 	b.hasLast = true
 	b.checkCaptures()
-	// Engine responds asynchronously
-	go func() {
-		b.GnuGoBlack()
-		done <- struct{}{}
-	}()
-	return true
+	go b.GnuGoBlack()
 }
 
 // ToggleBlack places a black stone at cursor (no engine response).
