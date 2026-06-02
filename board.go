@@ -33,7 +33,7 @@ type Board struct {
 	hasLast    bool
 	level      int
 	illegalOK  bool
-	lastPlayed string // "B" or "W"
+	lastPlayed string      // "B" or "W"
 	dirty      atomic.Bool // set by goroutines when board state changes
 	// SGF replay
 	history      []string // e.g. "BD4", "WQ16"
@@ -143,42 +143,9 @@ func (b *Board) MoveCursor(dx, dy int) {
 	}
 }
 
-// PlayBlackThenEngine places a black stone and asks GnuGo to respond as white.
-// Returns immediately if the engine is busy (still thinking from a previous move).
+// PlayBlackThenEngine places a black stone immediately and asks GnuGo to respond as white.
+// The stone is stored and drawn right away; GTP communication happens asynchronously.
 func (b *Board) PlayBlackThenEngine() {
-	// Don't block if engine is still processing
-	if b.gtp.Busy() {
-		return
-	}
-	pos := b.NumToGTP(b.CursorX, b.CursorY)
-	if pos == "" {
-		return
-	}
-	// Skip if position is already occupied (handles double-clicks/queued events)
-	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
-		return
-	}
-	resp := b.gtp.Send(fmt.Sprintf("play black %s", pos))
-	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
-		if !b.illegalOK {
-			fmt.Println("Illegal move:", pos)
-			return
-		}
-		fmt.Println("Illegal move (forced):", pos)
-	}
-	b.Stones[[2]int{b.CursorX, b.CursorY}] = Black
-	b.lastMove = [2]int{b.CursorX, b.CursorY}
-	b.hasLast = true
-	b.checkCaptures()
-	// Engine responds asynchronously to keep UI responsive
-	go b.GnuGoWhite()
-}
-
-// PlayWhiteThenEngine places a white stone and asks GnuGo to respond as black.
-func (b *Board) PlayWhiteThenEngine() {
-	if b.gtp.Busy() {
-		return
-	}
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	if pos == "" {
 		return
@@ -187,18 +154,57 @@ func (b *Board) PlayWhiteThenEngine() {
 	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
 		return
 	}
-	resp := b.gtp.Send(fmt.Sprintf("play white %s", pos))
-	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
-		if !b.illegalOK {
-			fmt.Println("Illegal move:", pos)
+	// Skip if engine is busy (previous genmove still running)
+	if b.gtp.Busy() {
+		return
+	}
+	// Place stone immediately in local state
+	b.Stones[[2]int{b.CursorX, b.CursorY}] = Black
+	b.lastMove = [2]int{b.CursorX, b.CursorY}
+	b.hasLast = true
+	b.dirty.Store(true)
+	// Send to GnuGo and get response asynchronously
+	go func(gtpPos string) {
+		resp := b.gtp.Send(fmt.Sprintf("play black %s", gtpPos))
+		if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
+			fmt.Println("Illegal move:", gtpPos)
+			// Remove the stone we optimistically placed
+			delete(b.Stones, b.lastMove)
+			b.dirty.Store(true)
 			return
 		}
+		b.checkCaptures()
+		b.GnuGoWhite()
+	}(pos)
+}
+
+// PlayWhiteThenEngine places a white stone immediately and asks GnuGo to respond as black.
+func (b *Board) PlayWhiteThenEngine() {
+	pos := b.NumToGTP(b.CursorX, b.CursorY)
+	if pos == "" {
+		return
+	}
+	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
+		return
+	}
+	if b.gtp.Busy() {
+		return
 	}
 	b.Stones[[2]int{b.CursorX, b.CursorY}] = White
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
 	b.hasLast = true
-	b.checkCaptures()
-	go b.GnuGoBlack()
+	b.dirty.Store(true)
+	go func(gtpPos string) {
+		resp := b.gtp.Send(fmt.Sprintf("play white %s", gtpPos))
+		if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
+			fmt.Println("Illegal move:", gtpPos)
+			delete(b.Stones, b.lastMove)
+			b.dirty.Store(true)
+			return
+		}
+		b.checkCaptures()
+		b.GnuGoBlack()
+	}(pos)
 }
 
 // ToggleBlack places a black stone at cursor (no engine response).
