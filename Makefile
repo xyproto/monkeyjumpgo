@@ -1,4 +1,4 @@
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall run
 
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
@@ -13,7 +13,7 @@ $(BINARY):
 	go build -o $(BINARY) .
 
 clean:
-	rm -f $(BINARY)
+	rm -f $(BINARY) $(BINARY)go
 
 install: $(BINARY)
 	install -Dm755 $(BINARY) $(DESTDIR)$(BINDIR)/$(BINARY)
@@ -37,3 +37,6 @@ install: $(BINARY)
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(BINARY)
 	rm -rf $(DESTDIR)$(DATADIR)
+
+run: $(BINARY)
+	./$(BINARY) --tiny
