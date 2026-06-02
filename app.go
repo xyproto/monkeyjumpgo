@@ -122,8 +122,8 @@ func (a *App) Run() {
 	needsRedraw := false
 	running := true
 	for running {
-		// Check if a background goroutine updated the board
-		if a.board.dirty.Swap(false) {
+		// Check if engine has finished thinking
+		if a.board.ApplyEngineMove() {
 			needsRedraw = true
 		}
 

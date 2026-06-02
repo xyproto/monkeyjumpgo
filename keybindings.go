@@ -166,7 +166,7 @@ func (kb *Keybindings) loadDefaults() {
 	kb.Keys[ScancodeS] = Binding{Command: "savesgf", Args: []string{"saved.sgf"}}
 	kb.Keys[ScancodeL] = Binding{Command: "reloadsgf"}
 	kb.Keys[ScancodeN] = Binding{Command: "next"}
-	kb.Keys[ScancodeP] = Binding{Command: "previous"}
+	kb.Keys[ScancodeP] = Binding{Command: "passblack"}
 
 	// GnuGo commands
 	kb.Keys[ScancodeF1] = Binding{Command: "gnugoinfo"}
@@ -210,7 +210,7 @@ func (kb *Keybindings) loadDefaults() {
 // ExecuteBinding runs a binding command. Returns true if the app should quit.
 func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 	switch b.Command {
-	// Cursor movement
+	// Cursor movement (always allowed)
 	case "left":
 		a.board.MoveCursor(-1, 0)
 	case "right":
@@ -226,6 +226,49 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 			a.board.JumpPos(x, y)
 		}
 
+	// Quit is always allowed
+	case "quit":
+		a.board.ShowBoard()
+		return true
+
+	// Non-GTP commands (always allowed)
+	case "showlastmove":
+		a.board.ShowLastMove()
+	case "previous":
+		a.board.PreviousMove()
+	case "next":
+		a.board.NextMove()
+	case "nextorload":
+		a.board.NextOrLoad()
+	case "guessorplace":
+		a.board.GuessOrPlace()
+	case "toggleillegal":
+		a.board.ToggleIllegal()
+	case "save":
+		fn := "goboard.bmp"
+		if len(b.Args) > 0 {
+			fn = b.Args[0]
+		}
+		if err := a.renderer.SaveScreenshot(fn); err != nil {
+			fmt.Fprintf(os.Stderr, "Screenshot failed: %v\n", err)
+		} else {
+			fmt.Println("Saved:", fn)
+		}
+
+	default:
+		// All other commands require GTP access — skip if engine is busy
+		if a.board.EngineThinking() {
+			return false
+		}
+		a.executeGTPBinding(b, drawFn)
+	}
+	return false
+}
+
+// executeGTPBinding handles commands that may use the GTP engine.
+// Must only be called when the engine is not busy.
+func (a *App) executeGTPBinding(b Binding, drawFn func()) {
+	switch b.Command {
 	// Placing stones and playing
 	case "playblack":
 		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
@@ -237,7 +280,7 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 				a.board.MyPlay("white", drawFn)
 			}
 		} else {
-			a.board.PlayBlackThenEngine()
+			a.board.PlayBlackThenEngine(drawFn)
 		}
 	case "playwhite":
 		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
@@ -249,7 +292,7 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 				a.board.MyPlay("black", drawFn)
 			}
 		} else {
-			a.board.PlayWhiteThenEngine()
+			a.board.PlayWhiteThenEngine(drawFn)
 		}
 	case "myplay":
 		color := "white"
@@ -271,8 +314,6 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		a.board.PassBlack()
 	case "passwhite":
 		a.board.PassWhite()
-	case "showlastmove":
-		a.board.ShowLastMove()
 
 	// SGF-related
 	case "savesgf":
@@ -291,14 +332,6 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 			fn = b.Args[0]
 		}
 		a.board.LoadSGF(fn)
-	case "next":
-		a.board.NextMove()
-	case "previous":
-		a.board.PreviousMove()
-	case "nextorload":
-		a.board.NextOrLoad()
-	case "guessorplace":
-		a.board.GuessOrPlace()
 
 	// GnuGo commands
 	case "gnugoinfo":
@@ -343,11 +376,6 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		}
 
 	// Special functions
-	case "quit":
-		a.board.ShowBoard()
-		return true
-	case "toggleillegal":
-		a.board.ToggleIllegal()
 	case "clear":
 		a.board.Clear()
 	case "console":
@@ -356,16 +384,6 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		a.board.ListStones()
 	case "playguess":
 		a.board.PlayGuess()
-	case "save":
-		fn := "goboard.bmp"
-		if len(b.Args) > 0 {
-			fn = b.Args[0]
-		}
-		if err := a.renderer.SaveScreenshot(fn); err != nil {
-			fmt.Fprintf(os.Stderr, "Screenshot failed: %v\n", err)
-		} else {
-			fmt.Println("Saved:", fn)
-		}
 
 	// Game management
 	case "newasblack":
@@ -378,7 +396,10 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		if experimental {
 			a.board.MyPlay("white", drawFn)
 		} else {
-			a.board.GnuGoWhite()
+			go func() {
+				move := a.board.gtp.SendExtract("genmove white")
+				a.board.EngineCh <- engineResult{Color: White, Move: strings.TrimSpace(move)}
+			}()
 		}
 	case "newaswhite":
 		experimental := len(b.Args) > 0 && b.Args[0] == "experimental"
@@ -390,10 +411,12 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		if experimental {
 			a.board.MyPlay("black", drawFn)
 		} else {
-			a.board.GnuGoBlack()
+			go func() {
+				move := a.board.gtp.SendExtract("genmove black")
+				a.board.EngineCh <- engineResult{Color: Black, Move: strings.TrimSpace(move)}
+			}()
 		}
 	case "status":
 		a.board.Status()
 	}
-	return false
 }

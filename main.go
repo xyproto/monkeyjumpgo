@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -12,6 +13,11 @@ const (
 	defaultWinSize   = 512
 	version          = "1.0.0"
 )
+
+func init() {
+	// SDL requires all calls to happen from the same OS thread.
+	runtime.LockOSThread()
+}
 
 func main() {
 	boardSize := defaultBoardSize

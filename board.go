@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 )
 
 // Stone color
@@ -17,6 +16,12 @@ const (
 	Black
 	White
 )
+
+// engineResult is sent from the genmove goroutine back to the main thread.
+type engineResult struct {
+	Color StoneColor
+	Move  string // GTP move string (e.g. "D4") or "PASS" or "resign"
+}
 
 // Board manages the Go board state and communicates with GnuGo.
 type Board struct {
@@ -33,8 +38,8 @@ type Board struct {
 	hasLast    bool
 	level      int
 	illegalOK  bool
-	lastPlayed string      // "B" or "W"
-	dirty      atomic.Bool // set by goroutines when board state changes
+	lastPlayed string // "B" or "W"
+	EngineCh   chan engineResult
 	// SGF replay
 	history      []string // e.g. "BD4", "WQ16"
 	historyIndex int
@@ -53,6 +58,7 @@ func NewBoard(size int, gtp *GTP) *Board {
 		level:        9,
 		historyIndex: -1,
 		lastPlayed:   "W",
+		EngineCh:     make(chan engineResult, 1),
 	}
 	gtp.Send(fmt.Sprintf("boardsize %d", size))
 	gtp.Send("clear_board")
@@ -143,43 +149,45 @@ func (b *Board) MoveCursor(dx, dy int) {
 	}
 }
 
-// PlayBlackThenEngine places a black stone immediately and asks GnuGo to respond as white.
-// The stone is stored and drawn right away; GTP communication happens asynchronously.
-func (b *Board) PlayBlackThenEngine() {
+// PlayBlackThenEngine places a black stone and asks GnuGo to respond as white.
+// The player's stone is placed synchronously; genmove runs in a goroutine so
+// the event loop stays responsive. The result arrives via EngineCh.
+func (b *Board) PlayBlackThenEngine(drawFn func()) {
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	if pos == "" {
 		return
 	}
-	// Skip if position is already occupied
 	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
 		return
 	}
-	// Skip if engine is busy (previous genmove still running)
-	if b.gtp.Busy() {
+	// Don't allow moves while engine is thinking
+	if b.EngineThinking() {
 		return
 	}
-	// Place stone immediately in local state
+	resp := b.gtp.Send(fmt.Sprintf("play black %s", pos))
+	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
+		if !b.illegalOK {
+			fmt.Println("Illegal move:", pos)
+			return
+		}
+		fmt.Println("Illegal move (forced):", pos)
+	}
 	b.Stones[[2]int{b.CursorX, b.CursorY}] = Black
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
 	b.hasLast = true
-	b.dirty.Store(true)
-	// Send to GnuGo and get response asynchronously
-	go func(gtpPos string) {
-		resp := b.gtp.Send(fmt.Sprintf("play black %s", gtpPos))
-		if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
-			fmt.Println("Illegal move:", gtpPos)
-			// Remove the stone we optimistically placed
-			delete(b.Stones, b.lastMove)
-			b.dirty.Store(true)
-			return
-		}
-		b.checkCaptures()
-		b.GnuGoWhite()
-	}(pos)
+	b.checkCaptures()
+	if drawFn != nil {
+		drawFn()
+	}
+	// Ask engine to respond asynchronously
+	go func() {
+		move := b.gtp.SendExtract("genmove white")
+		b.EngineCh <- engineResult{Color: White, Move: strings.TrimSpace(move)}
+	}()
 }
 
-// PlayWhiteThenEngine places a white stone immediately and asks GnuGo to respond as black.
-func (b *Board) PlayWhiteThenEngine() {
+// PlayWhiteThenEngine places a white stone and asks GnuGo to respond as black.
+func (b *Board) PlayWhiteThenEngine(drawFn func()) {
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	if pos == "" {
 		return
@@ -187,28 +195,56 @@ func (b *Board) PlayWhiteThenEngine() {
 	if _, occupied := b.Stones[[2]int{b.CursorX, b.CursorY}]; occupied {
 		return
 	}
-	if b.gtp.Busy() {
+	if b.EngineThinking() {
 		return
+	}
+	resp := b.gtp.Send(fmt.Sprintf("play white %s", pos))
+	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
+		if !b.illegalOK {
+			fmt.Println("Illegal move:", pos)
+			return
+		}
 	}
 	b.Stones[[2]int{b.CursorX, b.CursorY}] = White
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
 	b.hasLast = true
-	b.dirty.Store(true)
-	go func(gtpPos string) {
-		resp := b.gtp.Send(fmt.Sprintf("play white %s", gtpPos))
-		if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
-			fmt.Println("Illegal move:", gtpPos)
-			delete(b.Stones, b.lastMove)
-			b.dirty.Store(true)
-			return
+	b.checkCaptures()
+	if drawFn != nil {
+		drawFn()
+	}
+	go func() {
+		move := b.gtp.SendExtract("genmove black")
+		b.EngineCh <- engineResult{Color: Black, Move: strings.TrimSpace(move)}
+	}()
+}
+
+// EngineThinking returns true if the GTP engine is currently processing a command.
+func (b *Board) EngineThinking() bool {
+	return !b.gtp.Available()
+}
+
+// ApplyEngineMove checks the channel for a completed engine move and applies it.
+// Returns true if a move was applied (caller should redraw).
+func (b *Board) ApplyEngineMove() bool {
+	select {
+	case result := <-b.EngineCh:
+		if result.Move == "PASS" || result.Move == "resign" {
+			fmt.Printf("GnuGo (%v): %s\n", result.Color, result.Move)
+			return true
 		}
+		b.placeGTPMove(result.Color, result.Move)
 		b.checkCaptures()
-		b.GnuGoBlack()
-	}(pos)
+		return true
+	default:
+		return false
+	}
 }
 
 // ToggleBlack places a black stone at cursor (no engine response).
 func (b *Board) ToggleBlack() bool {
+	if b.EngineThinking() {
+		return false
+	}
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	resp := b.gtp.Send(fmt.Sprintf("play black %s", pos))
 	if (strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?")) && !b.illegalOK {
@@ -223,6 +259,9 @@ func (b *Board) ToggleBlack() bool {
 
 // ToggleWhite places a white stone at cursor (no engine response).
 func (b *Board) ToggleWhite() bool {
+	if b.EngineThinking() {
+		return false
+	}
 	pos := b.NumToGTP(b.CursorX, b.CursorY)
 	resp := b.gtp.Send(fmt.Sprintf("play white %s", pos))
 	if (strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?")) && !b.illegalOK {
@@ -240,11 +279,9 @@ func (b *Board) GnuGoWhite() {
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
 		fmt.Println("GnuGo (white):", move)
-		b.dirty.Store(true)
 		return
 	}
 	b.placeGTPMove(White, move)
-	b.dirty.Store(true)
 }
 
 func (b *Board) GnuGoBlack() {
@@ -252,11 +289,9 @@ func (b *Board) GnuGoBlack() {
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
 		fmt.Println("GnuGo (black):", move)
-		b.dirty.Store(true)
 		return
 	}
 	b.placeGTPMove(Black, move)
-	b.dirty.Store(true)
 }
 
 func (b *Board) placeGTPMove(color StoneColor, pos string) {
@@ -303,6 +338,9 @@ func (b *Board) syncFromEngine() {
 }
 
 func (b *Board) Undo() {
+	if b.EngineThinking() {
+		return
+	}
 	// Undo the engine's last move and the player's last move
 	resp := b.gtp.Send("undo")
 	if strings.Contains(resp, "cannot") {
@@ -317,13 +355,25 @@ func (b *Board) Undo() {
 }
 
 func (b *Board) PassBlack() {
+	if b.EngineThinking() {
+		return
+	}
 	b.gtp.Send("play black PASS")
-	b.GnuGoWhite()
+	go func() {
+		move := b.gtp.SendExtract("genmove white")
+		b.EngineCh <- engineResult{Color: White, Move: strings.TrimSpace(move)}
+	}()
 }
 
 func (b *Board) PassWhite() {
+	if b.EngineThinking() {
+		return
+	}
 	b.gtp.Send("play white PASS")
-	b.GnuGoBlack()
+	go func() {
+		move := b.gtp.SendExtract("genmove black")
+		b.EngineCh <- engineResult{Color: Black, Move: strings.TrimSpace(move)}
+	}()
 }
 
 func (b *Board) Clear() {
@@ -510,7 +560,10 @@ func (b *Board) NewAsBlack(drawFn func()) {
 	if drawFn != nil {
 		drawFn()
 	}
-	b.GnuGoWhite()
+	go func() {
+		move := b.gtp.SendExtract("genmove white")
+		b.EngineCh <- engineResult{Color: White, Move: strings.TrimSpace(move)}
+	}()
 }
 
 // NewAsWhite clears the board, cycles level, and has GnuGo play first as black.
@@ -520,7 +573,10 @@ func (b *Board) NewAsWhite(drawFn func()) {
 	if drawFn != nil {
 		drawFn()
 	}
-	b.GnuGoBlack()
+	go func() {
+		move := b.gtp.SendExtract("genmove black")
+		b.EngineCh <- engineResult{Color: Black, Move: strings.TrimSpace(move)}
+	}()
 }
 
 // ListStones prints all stones on the board.
