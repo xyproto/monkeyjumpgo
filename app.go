@@ -122,6 +122,11 @@ func (a *App) Run() {
 	needsRedraw := false
 	running := true
 	for running {
+		// Check if a background goroutine updated the board
+		if a.board.dirty.Swap(false) {
+			needsRedraw = true
+		}
+
 		// Drain all pending events
 		for {
 			ev, ok := pollEvent()

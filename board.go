@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // Stone color
@@ -33,6 +34,7 @@ type Board struct {
 	level      int
 	illegalOK  bool
 	lastPlayed string // "B" or "W"
+	dirty      atomic.Bool // set by goroutines when board state changes
 	// SGF replay
 	history      []string // e.g. "BD4", "WQ16"
 	historyIndex int
@@ -232,9 +234,11 @@ func (b *Board) GnuGoWhite() {
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
 		fmt.Println("GnuGo (white):", move)
+		b.dirty.Store(true)
 		return
 	}
 	b.placeGTPMove(White, move)
+	b.dirty.Store(true)
 }
 
 func (b *Board) GnuGoBlack() {
@@ -242,9 +246,11 @@ func (b *Board) GnuGoBlack() {
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
 		fmt.Println("GnuGo (black):", move)
+		b.dirty.Store(true)
 		return
 	}
 	b.placeGTPMove(Black, move)
+	b.dirty.Store(true)
 }
 
 func (b *Board) placeGTPMove(color StoneColor, pos string) {
