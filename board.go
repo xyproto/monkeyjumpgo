@@ -167,10 +167,10 @@ func (b *Board) PlayBlackThenEngine(drawFn func()) {
 	resp := b.gtp.Send(fmt.Sprintf("play black %s", pos))
 	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
 		if !b.illegalOK {
-			fmt.Println("Illegal move:", pos)
+			status("Illegal move: %s", pos)
 			return
 		}
-		fmt.Println("Illegal move (forced):", pos)
+		status("Illegal move (forced): %s", pos)
 	}
 	b.Stones[[2]int{b.CursorX, b.CursorY}] = Black
 	b.lastMove = [2]int{b.CursorX, b.CursorY}
@@ -201,7 +201,7 @@ func (b *Board) PlayWhiteThenEngine(drawFn func()) {
 	resp := b.gtp.Send(fmt.Sprintf("play white %s", pos))
 	if strings.Contains(resp, "illegal") || strings.HasPrefix(resp, "?") {
 		if !b.illegalOK {
-			fmt.Println("Illegal move:", pos)
+			status("Illegal move: %s", pos)
 			return
 		}
 	}
@@ -229,7 +229,7 @@ func (b *Board) ApplyEngineMove() bool {
 	select {
 	case result := <-b.EngineCh:
 		if result.Move == "PASS" || result.Move == "resign" {
-			fmt.Printf("GnuGo (%v): %s\n", result.Color, result.Move)
+			status("GnuGo (%v): %s", result.Color, result.Move)
 			return true
 		}
 		b.placeGTPMove(result.Color, result.Move)
@@ -278,7 +278,7 @@ func (b *Board) GnuGoWhite() {
 	move := b.gtp.SendExtract("genmove white")
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
-		fmt.Println("GnuGo (white):", move)
+		status("GnuGo (white): %s", move)
 		return
 	}
 	b.placeGTPMove(White, move)
@@ -288,7 +288,7 @@ func (b *Board) GnuGoBlack() {
 	move := b.gtp.SendExtract("genmove black")
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
-		fmt.Println("GnuGo (black):", move)
+		status("GnuGo (black): %s", move)
 		return
 	}
 	b.placeGTPMove(Black, move)
@@ -304,7 +304,7 @@ func (b *Board) placeGTPMove(color StoneColor, pos string) {
 	b.lastMove = [2]int{x, y}
 	b.hasLast = true
 	b.checkCaptures()
-	fmt.Printf("GnuGo plays: %s (%d,%d)\n", pos, x, y)
+	status("GnuGo plays %s", pos)
 }
 
 // checkCaptures queries the engine for captures and resyncs the board if any occurred.
@@ -414,15 +414,15 @@ func (b *Board) ShowLastMove() {
 func (b *Board) ToggleIllegal() {
 	b.illegalOK = !b.illegalOK
 	if b.illegalOK {
-		fmt.Println("Illegal moves: allowed")
+		status("Illegal moves: allowed")
 	} else {
-		fmt.Println("Illegal moves: blocked")
+		status("Illegal moves: blocked")
 	}
 }
 
 func (b *Board) SaveSGF(filename string) {
 	b.gtp.Send(fmt.Sprintf("printsgf %s", filename))
-	fmt.Println("Saved:", filename)
+	status("Saved %s", filename)
 }
 
 // NextMove advances in the SGF history.
@@ -494,7 +494,7 @@ func (b *Board) JumpPos(x, y int) {
 // TimeSettings sets time controls.
 func (b *Board) TimeSettings(mainTime, byoYomiTime, byoYomiStones int) {
 	b.gtp.Send(fmt.Sprintf("time_settings %d %d %d", mainTime, byoYomiTime, byoYomiStones))
-	fmt.Printf("Time settings: main=%d byo_yomi=%d stones=%d\n", mainTime, byoYomiTime, byoYomiStones)
+	status("Time settings: main=%d byo_yomi=%d stones=%d", mainTime, byoYomiTime, byoYomiStones)
 }
 
 // NextLevel cycles through GnuGo difficulty levels.
@@ -504,7 +504,7 @@ func (b *Board) NextLevel() {
 		b.level = 0
 	}
 	b.SetLevel(b.level)
-	fmt.Println("Level:", b.level)
+	status("Level %d", b.level)
 }
 
 // FutureWhite shows top engine moves as gray markers.
@@ -624,7 +624,7 @@ func (b *Board) PlayGuess() {
 	cursorPos := b.NumToGTP(b.CursorX, b.CursorY)
 	if cursorPos == expectedPos {
 		if b.guessCounter > 1 {
-			fmt.Printf("Guessed the next move in %d clicks!\n", b.guessCounter)
+			status("Guessed the next move in %d clicks!", b.guessCounter)
 		}
 		b.guessCounter = 0
 		b.NextMove()
@@ -637,7 +637,7 @@ func (b *Board) PlayGuess() {
 func (b *Board) Status() {
 	b.ShowLastMove()
 	score := b.EstimateScore()
-	fmt.Printf("Score: %s | Level: %d\n", score, b.level)
+	status("%s, level %d", describeScore(score, false), b.level)
 }
 
 // GnuGoInfo prints engine name, version, and settings.

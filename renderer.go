@@ -16,6 +16,7 @@ type BoardRenderer struct {
 	windowW   int
 	windowH   int
 	tiny      bool
+	overlay   func(r *Renderer)
 }
 
 func NewBoardRenderer(r *Renderer, boardSize, windowW, windowH int, themeDir string, tiny bool) (*BoardRenderer, error) {
@@ -140,6 +141,9 @@ func (br *BoardRenderer) Draw(board *Board) {
 		r.FillRect(lx-markerSize/2, ly-markerSize/2, markerSize, markerSize)
 	}
 
+	if br.overlay != nil {
+		br.overlay(r)
+	}
 	r.Present()
 }
 

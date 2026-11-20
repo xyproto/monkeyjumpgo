@@ -15,6 +15,8 @@ type App struct {
 	gtp      *GTP
 	br       *BoardRenderer
 	kb       *Keybindings
+	help     *helpPanel
+	size     int
 }
 
 func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error) {
@@ -89,6 +91,15 @@ func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error
 		gtp:      gtp,
 		br:       br,
 		kb:       LoadKeybindings(dataPath("conf")),
+		help:     newHelpPanel(dataPath("conf", "keybindings.conf"), winSize),
+		size:     winSize,
+	}
+	br.overlay = func(r *Renderer) {
+		app.help.draw(r, winSize)
+		drawStatus(r, winSize, winSize, app.help.scale)
+	}
+	if app.help.open {
+		win.SetSize(app.help.windowWidth(), winSize)
 	}
 
 	// Load SGF if provided
@@ -124,6 +135,9 @@ func (a *App) Run() {
 	for running {
 		// Check if engine has finished thinking
 		if a.board.ApplyEngineMove() {
+			needsRedraw = true
+		}
+		if statusExpired() {
 			needsRedraw = true
 		}
 
@@ -162,6 +176,15 @@ func (a *App) processEvent(ev Event, needsRedraw *bool) bool {
 		*needsRedraw = true
 
 	case EventMouseButtonDown:
+		if a.help.hit(ev.MouseX, ev.MouseY) {
+			a.help.open = !a.help.open
+			a.window.SetSize(a.help.windowWidth(), a.size)
+			*needsRedraw = true
+			return false
+		}
+		if ev.MouseX >= float32(a.size) {
+			return false
+		}
 		x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
 		a.board.CursorX = x
 		a.board.CursorY = y
@@ -173,6 +196,9 @@ func (a *App) processEvent(ev Event, needsRedraw *bool) bool {
 		*needsRedraw = true
 
 	case EventMouseMotion:
+		if ev.MouseX >= float32(a.size) {
+			return false
+		}
 		x, y := a.br.ScreenToBoard(ev.MouseX, ev.MouseY)
 		if x != a.board.CursorX || y != a.board.CursorY {
 			a.board.CursorX = x

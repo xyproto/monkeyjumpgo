@@ -252,7 +252,7 @@ func (a *App) ExecuteBinding(b Binding, drawFn func()) bool {
 		if err := a.renderer.SaveScreenshot(fn); err != nil {
 			fmt.Fprintf(os.Stderr, "Screenshot failed: %v\n", err)
 		} else {
-			fmt.Println("Saved:", fn)
+			status("Saved %s", fn)
 		}
 
 	default:
@@ -367,7 +367,14 @@ func (a *App) executeGTPBinding(b Binding, drawFn func()) {
 		if len(b.Args) > 0 {
 			cmd := strings.Join(b.Args, " ")
 			result := a.board.gtp.SendExtract(cmd)
-			fmt.Println(result)
+			switch b.Args[0] {
+			case "final_score":
+				status("%s", describeScore(result, true))
+			case "estimate_score":
+				status("%s", describeScore(result, false))
+			default:
+				status("%s", result)
+			}
 		}
 	case "multigtp":
 		if len(b.Args) > 0 {

@@ -42,6 +42,10 @@ func (w *Window) Show() {
 	C.SDL_ShowWindow(w.w)
 }
 
+func (w *Window) SetSize(width, height int) {
+	C.SDL_SetWindowSize(w.w, C.int(width), C.int(height))
+}
+
 func (w *Window) Raise() {
 	C.SDL_RaiseWindow(w.w)
 }
@@ -61,7 +65,17 @@ func createRenderer(w *Window) (*Renderer, error) {
 	if r == nil {
 		return nil, fmt.Errorf("SDL_CreateRenderer: %s", C.GoString(C.SDL_GetError()))
 	}
+	C.SDL_SetRenderDrawBlendMode(r, C.SDL_BLENDMODE_BLEND)
 	return &Renderer{r: r}, nil
+}
+
+// DebugText draws text with SDL's built-in 8x8 font, at the given scale
+func (r *Renderer) DebugText(x, y, scale float32, text string) {
+	ct := C.CString(text)
+	defer C.free(unsafe.Pointer(ct))
+	C.SDL_SetRenderScale(r.r, C.float(scale), C.float(scale))
+	C.SDL_RenderDebugText(r.r, C.float(x/scale), C.float(y/scale), ct)
+	C.SDL_SetRenderScale(r.r, 1, 1)
 }
 
 func (r *Renderer) Destroy() {
