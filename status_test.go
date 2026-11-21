@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDescribeScore(t *testing.T) {
 	for _, c := range []struct {
@@ -22,12 +25,24 @@ func TestDescribeScore(t *testing.T) {
 
 func TestHelpLines(t *testing.T) {
 	lines := helpLines("conf/keybindings.conf")
-	if len(lines) < 10 || lines[0] != "Cursor movement" {
+	if len(lines) < 10 || !strings.HasPrefix(lines[0], "Arrow keys") {
 		t.Fatalf("unexpected help lines: %q", lines[:min(3, len(lines))])
 	}
 	for _, l := range lines {
 		if len(l) > 0 && l[0] == '#' {
 			t.Errorf("comment leaked into the help: %q", l)
 		}
+		if len(l) > 40 {
+			t.Errorf("help line too long for the board: %q", l)
+		}
+	}
+}
+
+func TestJoinKeys(t *testing.T) {
+	if got := joinKeys([]string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}); got != "1-9, 0" {
+		t.Errorf("joinKeys digits = %q", got)
+	}
+	if got := joinKeys([]string{"Left", "Right", "Up", "Down"}); got != "Arrow keys" {
+		t.Errorf("joinKeys arrows = %q", got)
 	}
 }

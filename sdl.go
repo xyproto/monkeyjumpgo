@@ -232,6 +232,7 @@ const (
 	ScancodeE         = C.SDL_SCANCODE_E
 	ScancodeF         = C.SDL_SCANCODE_F
 	ScancodeG         = C.SDL_SCANCODE_G
+	ScancodeH         = C.SDL_SCANCODE_H
 	ScancodeI         = C.SDL_SCANCODE_I
 	ScancodeL         = C.SDL_SCANCODE_L
 	ScancodeM         = C.SDL_SCANCODE_M

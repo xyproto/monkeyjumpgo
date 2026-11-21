@@ -37,6 +37,7 @@ var keyNameToScancode = map[string]int{
 	"e":         ScancodeE,
 	"f":         ScancodeF,
 	"g":         ScancodeG,
+	"h":         ScancodeH,
 	"i":         ScancodeI,
 	"l":         ScancodeL,
 	"m":         ScancodeM,

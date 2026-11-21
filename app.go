@@ -95,11 +95,8 @@ func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error
 		size:     winSize,
 	}
 	br.overlay = func(r *Renderer) {
-		app.help.draw(r, winSize)
 		drawStatus(r, winSize, winSize, app.help.scale)
-	}
-	if app.help.open {
-		win.SetSize(app.help.windowWidth(), winSize)
+		app.help.draw(r)
 	}
 
 	// Load SGF if provided
@@ -170,15 +167,22 @@ func (a *App) processEvent(ev Event, needsRedraw *bool) bool {
 		return true
 
 	case EventKeyDown:
+		*needsRedraw = true
+		if a.help.open {
+			a.help.open = false
+			return false
+		}
+		if _, bound := a.kb.Keys[ev.Key]; !bound && ev.Key == keyNameToScancode["h"] {
+			a.help.open = true
+			return false
+		}
 		if a.handleKey(ev.Key) {
 			return true
 		}
-		*needsRedraw = true
 
 	case EventMouseButtonDown:
-		if a.help.hit(ev.MouseX, ev.MouseY) {
+		if a.help.hit(ev.MouseX, ev.MouseY) || a.help.open {
 			a.help.open = !a.help.open
-			a.window.SetSize(a.help.windowWidth(), a.size)
 			*needsRedraw = true
 			return false
 		}

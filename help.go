@@ -3,18 +3,16 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-// helpPanel is the key and mouse overview that opens to the right of the board
+// helpPanel is the key and mouse overview that is drawn on top of the board
 type helpPanel struct {
-	open    bool
-	lines   []string
-	scale   float32
-	boardW  int
-	width   int
-	rows    int
-	columnW float32
+	open   bool
+	lines  []string
+	scale  float32
+	boardW int
 }
 
 func helpSeenPath() string {
@@ -29,39 +27,139 @@ func helpSeenPath() string {
 	return filepath.Join(dir, "monkeyjump", "help-seen")
 }
 
-// helpLines lists the bindings in keybindings.conf, with the comment above each group as a heading
+// describe returns a short description of a keybindings.conf command, or "" for commands that are left out of the help
+func describe(command string, args []string) string {
+	arg := strings.Join(args, " ")
+	switch command {
+	case "left", "right", "up", "down":
+		return "Move the cursor"
+	case "playblack":
+		return "Play black, GnuGo answers"
+	case "playwhite":
+		return "Play white, GnuGo answers"
+	case "myplay":
+		return "Play " + arg + " yourself"
+	case "gnugowhite":
+		return "GnuGo plays white"
+	case "gnugoblack":
+		return "GnuGo plays black"
+	case "togglewhite":
+		return "Put a white stone"
+	case "toggleblack":
+		return "Put a black stone"
+	case "undo":
+		return "Undo"
+	case "passblack":
+		return "Pass as black"
+	case "passwhite":
+		return "Pass as white"
+	case "showlastmove":
+		return "Show the last move"
+	case "savesgf":
+		return "Save the game"
+	case "reloadsgf":
+		return "Load the saved game"
+	case "next":
+		return "Next move"
+	case "previous":
+		return "Previous move"
+	case "level":
+		return "GnuGo strength"
+	case "play100moves":
+		return "GnuGo plays 100 moves"
+	case "analyze":
+		return "Analyze the position"
+	case "gtp":
+		switch arg {
+		case "estimate_score":
+			return "Estimate the score"
+		case "final_score":
+			return "Final score"
+		}
+	case "quit":
+		return "Quit"
+	case "clear":
+		return "Clear the board"
+	case "console":
+		return "GTP console"
+	case "save":
+		return "Save a screenshot"
+	case "status":
+		return "Score and level"
+	case "newasblack":
+		return "New game as black"
+	case "newaswhite":
+		return "New game as white"
+	}
+	return ""
+}
+
+// keyLabel turns a keybindings.conf key name into the name shown in the help
+func keyLabel(key string) string {
+	switch strings.ToLower(key) {
+	case "lmouse":
+		return "Click"
+	case "rmouse":
+		return "Right click"
+	case "mmouse":
+		return "Middle click"
+	}
+	return key
+}
+
+// joinKeys lists the keys for one description, with runs of digits like 1, 2, ..., 9 written as 1-9
+func joinKeys(keys []string) string {
+	if slices.Equal(keys, []string{"Left", "Right", "Up", "Down"}) {
+		return "Arrow keys"
+	}
+	var out []string
+	for i := 0; i < len(keys); {
+		j := i
+		for j+1 < len(keys) && len(keys[j]) == 1 && len(keys[j+1]) == 1 && keys[j][0] >= '0' && keys[j][0] <= '9' && keys[j+1][0] == keys[j][0]+1 {
+			j++
+		}
+		if j-i >= 2 {
+			out = append(out, keys[i]+"-"+keys[j])
+		} else {
+			out = append(out, keys[i:j+1]...)
+		}
+		i = j + 1
+	}
+	return strings.Join(out, ", ")
+}
+
+// helpLines lists what the bindings in keybindings.conf do, one line per description, with the keys for it
 func helpLines(confPath string) []string {
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		return nil
 	}
-	var out []string
-	rows := strings.Split(string(data), "\n")
-	for i, row := range rows {
-		row = strings.TrimSpace(row)
-		next := ""
-		if i+1 < len(rows) {
-			next = strings.TrimSpace(rows[i+1])
+	var order []string
+	keys := map[string][]string{}
+	for row := range strings.SplitSeq(string(data), "\n") {
+		fields := strings.Fields(row)
+		if len(fields) < 2 || strings.HasPrefix(fields[0], "#") || strings.HasPrefix(strings.ToLower(fields[0]), "kp") {
+			continue
 		}
-		switch {
-		case row == "":
-		case strings.HasPrefix(row, "#"):
-			if next != "" && !strings.HasPrefix(next, "#") {
-				if len(out) > 0 {
-					out = append(out, "")
-				}
-				heading := strings.TrimSpace(strings.TrimLeft(row, "#"))
-				if i := strings.IndexAny(heading, ",("); i > 0 {
-					heading = strings.TrimSpace(heading[:i])
-				}
-				out = append(out, heading)
-			}
-		default:
-			fields := strings.Fields(row)
-			out = append(out, "  "+padRight(fields[0], 11)+" "+strings.Join(fields[1:], " "))
+		d := describe(fields[1], fields[2:])
+		if d == "" {
+			continue
 		}
+		if _, ok := keys[d]; !ok {
+			order = append(order, d)
+		}
+		keys[d] = append(keys[d], keyLabel(fields[0]))
 	}
-	return out
+	width := 0
+	for _, d := range order {
+		width = max(width, len(joinKeys(keys[d])))
+	}
+	width = min(width, 12)
+	var out []string
+	for _, d := range order {
+		out = append(out, padRight(joinKeys(keys[d]), width)+"  "+d)
+	}
+	return append(out, "", padRight("h", width)+"  Show or hide this help")
 }
 
 func padRight(s string, n int) string {
@@ -74,14 +172,6 @@ func padRight(s string, n int) string {
 func newHelpPanel(confPath string, boardW int) *helpPanel {
 	h := &helpPanel{lines: helpLines(confPath), boardW: boardW}
 	h.scale = float32(max(1, boardW/450))
-	longest := 0
-	for _, l := range h.lines {
-		longest = max(longest, len(l))
-	}
-	h.columnW = float32(longest+2) * 8 * h.scale
-	h.rows = max(1, int((float32(boardW)-h.top()-4*h.scale)/h.lineH()))
-	columns := (len(h.lines) + h.rows - 1) / h.rows
-	h.width = int(float32(max(1, columns))*h.columnW + 16*h.scale)
 	if p := helpSeenPath(); p != "" {
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			h.open = true
@@ -94,29 +184,25 @@ func newHelpPanel(confPath string, boardW int) *helpPanel {
 }
 
 func (h *helpPanel) lineH() float32 {
-	return 10 * h.scale
+	return 11 * h.scale
 }
 
-func (h *helpPanel) top() float32 {
-	return 4*h.scale + 3*8*h.scale
-}
-
-func (h *helpPanel) windowWidth() int {
-	if h.open {
-		return h.boardW + h.width
+// box returns the area of the help text, centered on the board
+func (h *helpPanel) box() (x, y, w, bh float32) {
+	longest := 0
+	for _, l := range h.lines {
+		longest = max(longest, len(l))
 	}
-	return h.boardW
+	w = float32(longest+4) * 8 * h.scale
+	bh = float32(len(h.lines)+4) * h.lineH()
+	return (float32(h.boardW) - w) / 2, (float32(h.boardW) - bh) / 2, w, bh
 }
 
-// button returns the area of the ">>" or "<<" button
+// button returns the area of the "?" button in the top right corner of the board
 func (h *helpPanel) button() (x, y, w, bh float32) {
 	w = 3 * 8 * h.scale
 	bh = 2 * 8 * h.scale
-	x = float32(h.boardW) - w - 4*h.scale
-	if h.open {
-		x = float32(h.boardW) + 4*h.scale
-	}
-	return x, 4 * h.scale, w, bh
+	return float32(h.boardW) - w - 4*h.scale, 4 * h.scale, w, bh
 }
 
 func (h *helpPanel) hit(mx, my float32) bool {
@@ -124,24 +210,25 @@ func (h *helpPanel) hit(mx, my float32) bool {
 	return mx >= x && mx < x+w && my >= y && my < y+bh
 }
 
-func (h *helpPanel) draw(r *Renderer, windowH int) {
+func (h *helpPanel) draw(r *Renderer) {
 	if h.open {
-		r.SetDrawColor(24, 24, 28, 255)
-		r.FillRect(float32(h.boardW), 0, float32(h.width), float32(windowH))
+		x, y, w, bh := h.box()
+		r.SetDrawColor(16, 18, 24, 230)
+		r.FillRect(x, y, w, bh)
+		r.SetDrawColor(0xff, 0xd8, 0x60, 255)
+		r.DebugText(x+16*h.scale, y+h.lineH(), h.scale, "Monkeyjump Go")
 		r.SetDrawColor(0xe0, 0xe0, 0xe0, 255)
 		for i, l := range h.lines {
-			x := float32(h.boardW) + 8*h.scale + float32(i/h.rows)*h.columnW
-			y := h.top() + float32(i%h.rows)*h.lineH()
-			r.DebugText(x, y, h.scale, l)
+			r.DebugText(x+16*h.scale, y+float32(i+3)*h.lineH(), h.scale, l)
 		}
 	}
 	x, y, w, bh := h.button()
 	r.SetDrawColor(0, 0, 0, 160)
 	r.FillRect(x, y, w, bh)
 	r.SetDrawColor(0xe0, 0xe0, 0xe0, 255)
-	label := ">>"
+	label := " ?"
 	if h.open {
-		label = "<<"
+		label = " x"
 	}
 	r.DebugText(x+4*h.scale, y+4*h.scale, h.scale, label)
 }

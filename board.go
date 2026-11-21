@@ -229,7 +229,7 @@ func (b *Board) ApplyEngineMove() bool {
 	select {
 	case result := <-b.EngineCh:
 		if result.Move == "PASS" || result.Move == "resign" {
-			status("GnuGo (%v): %s", result.Color, result.Move)
+			status("%s", engineMoveText(result.Color, result.Move))
 			return true
 		}
 		b.placeGTPMove(result.Color, result.Move)
@@ -278,7 +278,7 @@ func (b *Board) GnuGoWhite() {
 	move := b.gtp.SendExtract("genmove white")
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
-		status("GnuGo (white): %s", move)
+		status("%s", engineMoveText(White, move))
 		return
 	}
 	b.placeGTPMove(White, move)
@@ -288,7 +288,7 @@ func (b *Board) GnuGoBlack() {
 	move := b.gtp.SendExtract("genmove black")
 	move = strings.TrimSpace(move)
 	if move == "PASS" || move == "resign" {
-		status("GnuGo (black): %s", move)
+		status("%s", engineMoveText(Black, move))
 		return
 	}
 	b.placeGTPMove(Black, move)
@@ -304,7 +304,7 @@ func (b *Board) placeGTPMove(color StoneColor, pos string) {
 	b.lastMove = [2]int{x, y}
 	b.hasLast = true
 	b.checkCaptures()
-	status("GnuGo plays %s", pos)
+	fmt.Printf("GnuGo plays %s\n", pos)
 }
 
 // checkCaptures queries the engine for captures and resyncs the board if any occurred.

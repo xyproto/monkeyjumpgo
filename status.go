@@ -64,6 +64,18 @@ func drawStatus(r *Renderer, boardW, windowH int, scale float32) {
 	r.DebugText(pad, float32(windowH)-h+pad, scale, text)
 }
 
+// engineMoveText describes a pass or a resignation by GnuGo
+func engineMoveText(color StoneColor, move string) string {
+	name := "white"
+	if color == Black {
+		name = "black"
+	}
+	if move == "resign" {
+		return "GnuGo resigns as " + name
+	}
+	return "GnuGo passes as " + name
+}
+
 // describeScore turns a GTP score like "W+12.5" or "B+Resign" into a sentence
 func describeScore(score string, final bool) string {
 	fields := strings.Fields(score)

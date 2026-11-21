@@ -11,7 +11,7 @@ import (
 const (
 	defaultBoardSize = 9
 	defaultWinSize   = 512
-	version          = "1.0.0"
+	version          = "1.0.1"
 )
 
 func init() {
