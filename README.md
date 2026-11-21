@@ -92,10 +92,12 @@ go build
 ## Themes
 
 Three themes are included:
+
 - **uligo** — Wooden board with realistic stones
 - **plain** — Simple flat design
 - **spreadsheet** — Minimalist grid style
 
-## License
+## General
 
-GPL-2.0
+* License: GPL-2.0
+* Version: 1.0.0
