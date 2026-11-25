@@ -100,4 +100,4 @@ Three themes are included:
 ## General
 
 * License: GPL-2.0
-* Version: 1.0.1
+* Version: 1.0.2
