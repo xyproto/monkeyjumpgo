@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +63,20 @@ func drawStatus(r *Renderer, boardW, windowH int, scale float32) {
 	r.FillRect(0, float32(windowH)-h, w, h)
 	r.SetDrawColor(0xe0, 0xe0, 0xe0, 255)
 	r.DebugText(pad, float32(windowH)-h+pad, scale, text)
+}
+
+// drawThinking draws three black dots in the lower right corner while GnuGo is thinking
+func drawThinking(r *Renderer, boardW, windowH int, scale float32) {
+	radius := 2 * scale
+	r.SetDrawColor(0, 0, 0, 255)
+	for i := range 3 {
+		cx := float32(boardW) - 6*scale - float32(2-i)*3*radius
+		cy := float32(windowH) - 6*scale
+		for dy := -radius; dy <= radius; dy++ {
+			dx := float32(math.Sqrt(float64(radius*radius - dy*dy)))
+			r.DrawLine(cx-dx, cy+dy, cx+dx, cy+dy)
+		}
+	}
 }
 
 // engineMoveText describes a pass or a resignation by GnuGo

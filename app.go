@@ -17,6 +17,7 @@ type App struct {
 	kb       *Keybindings
 	help     *helpPanel
 	size     int
+	thinking bool
 }
 
 func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error) {
@@ -96,6 +97,9 @@ func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error
 	}
 	br.overlay = func(r *Renderer) {
 		drawStatus(r, winSize, winSize, app.help.scale)
+		if app.thinking {
+			drawThinking(r, winSize, winSize, app.help.scale)
+		}
 		app.help.draw(r)
 	}
 
@@ -135,6 +139,10 @@ func (a *App) Run() {
 			needsRedraw = true
 		}
 		if statusExpired() {
+			needsRedraw = true
+		}
+		if thinking := a.board.EngineThinking(); thinking != a.thinking {
+			a.thinking = thinking
 			needsRedraw = true
 		}
 
