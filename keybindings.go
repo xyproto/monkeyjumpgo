@@ -199,7 +199,6 @@ func (kb *Keybindings) loadDefaults() {
 	kb.Keys[ScancodeI] = Binding{Command: "toggleillegal"}
 	kb.Keys[ScancodeQ] = Binding{Command: "quit", Args: []string{"0"}}
 	kb.Keys[ScancodeBackspace] = Binding{Command: "clear"}
-	kb.Keys[ScancodeC] = Binding{Command: "console"}
 	kb.Keys[ScancodeF12] = Binding{Command: "save", Args: []string{"goboard.bmp"}}
 
 	// Mouse

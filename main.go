@@ -58,7 +58,6 @@ Keybindings:
   s                Save SGF
   l                Reload SGF
   i                Toggle illegal moves
-  c                GTP console (interactive)
   o                Show future white moves
   t                Set time (5s main)
   x                Show move probabilities
