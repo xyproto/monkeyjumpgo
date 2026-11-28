@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // App ties everything together: window, renderer, board, GTP engine.
@@ -18,6 +19,7 @@ type App struct {
 	help     *helpPanel
 	size     int
 	thinking bool
+	spun     time.Time
 }
 
 func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error) {
@@ -97,9 +99,6 @@ func NewApp(boardSize int, filename string, winSize int, tiny bool) (*App, error
 	}
 	br.overlay = func(r *Renderer) {
 		drawStatus(r, winSize, winSize, app.help.scale)
-		if app.thinking {
-			drawThinking(r, winSize, winSize, app.help.scale)
-		}
 		app.help.draw(r)
 	}
 
@@ -143,6 +142,11 @@ func (a *App) Run() {
 		}
 		if thinking := a.board.EngineThinking(); thinking != a.thinking {
 			a.thinking = thinking
+			a.br.thinking = thinking
+			needsRedraw = true
+		}
+		if a.thinking && time.Since(a.spun) >= 40*time.Millisecond {
+			a.spun = time.Now()
 			needsRedraw = true
 		}
 

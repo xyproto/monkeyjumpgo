@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"time"
 )
 
 // BoardRenderer handles drawing the board, stones, and cursor.
@@ -16,6 +17,7 @@ type BoardRenderer struct {
 	windowW   int
 	windowH   int
 	tiny      bool
+	thinking  bool
 	overlay   func(r *Renderer)
 }
 
@@ -138,13 +140,45 @@ func (br *BoardRenderer) Draw(board *Board) {
 		ly := margin + float32(board.lastMove[1])*ch
 		markerSize := cw * 0.2
 		r.SetDrawColor(255, 0, 0, 200)
-		r.FillRect(lx-markerSize/2, ly-markerSize/2, markerSize, markerSize)
+		if br.thinking {
+			angle := float64(time.Now().UnixMilli()%1000) / 1000 * math.Pi
+			br.fillRotatedSquare(lx, ly, markerSize, angle)
+		} else {
+			r.FillRect(lx-markerSize/2, ly-markerSize/2, markerSize, markerSize)
+		}
 	}
 
 	if br.overlay != nil {
 		br.overlay(r)
 	}
 	r.Present()
+}
+
+func (br *BoardRenderer) fillRotatedSquare(cx, cy, size float32, angle float64) {
+	half := float64(size) / 2
+	var xs, ys [4]float64
+	for i := range 4 {
+		a := angle + float64(i)*math.Pi/2 + math.Pi/4
+		xs[i] = float64(cx) + half*math.Sqrt2*math.Cos(a)
+		ys[i] = float64(cy) + half*math.Sqrt2*math.Sin(a)
+	}
+	top, bottom := ys[0], ys[0]
+	for _, y := range ys {
+		top, bottom = min(top, y), max(bottom, y)
+	}
+	for y := math.Ceil(top); y <= bottom; y++ {
+		left, right := math.Inf(1), math.Inf(-1)
+		for i := range 4 {
+			x0, y0, x1, y1 := xs[i], ys[i], xs[(i+1)%4], ys[(i+1)%4]
+			if (y0 <= y && y1 > y) || (y1 <= y && y0 > y) {
+				x := x0 + (y-y0)*(x1-x0)/(y1-y0)
+				left, right = min(left, x), max(right, x)
+			}
+		}
+		if left <= right {
+			br.renderer.DrawLine(float32(left), float32(y), float32(right), float32(y))
+		}
+	}
 }
 
 func (br *BoardRenderer) drawFilledCircle(cx, cy, radius float32) {
